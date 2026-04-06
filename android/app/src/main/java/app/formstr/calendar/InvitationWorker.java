@@ -105,6 +105,10 @@ public class InvitationWorker extends Worker {
                 showNotification(eventIds.size());
             }
 
+            prefs.edit()
+                    .putString(LAST_INVITATION_FETCH_KEY, String.valueOf(System.currentTimeMillis() / 1000))
+                    .apply();
+
             return Result.success();
         } catch (Exception e) {
             Log.e(TAG, "InvitationWorker failed", e);

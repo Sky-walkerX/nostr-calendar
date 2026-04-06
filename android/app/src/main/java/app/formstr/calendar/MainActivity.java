@@ -139,13 +139,13 @@ public class MainActivity extends BridgeActivity {
                 .build();
 
         PeriodicWorkRequest workRequest = new PeriodicWorkRequest.Builder(
-                InvitationWorker.class, 1, TimeUnit.HOURS)
+                InvitationWorker.class, 15, TimeUnit.MINUTES)
                 .setConstraints(constraints)
                 .build();
 
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
                 INVITATION_WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE,
                 workRequest);
     }
 }
