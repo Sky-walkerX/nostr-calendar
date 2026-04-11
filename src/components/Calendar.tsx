@@ -9,6 +9,8 @@ import { Box } from "@mui/material";
 import { SwipeableView } from "./SwipeableView";
 import { useCalendarLists } from "../stores/calendarLists";
 import { useInvitations } from "../stores/invitations";
+import { useSchedulingPages } from "../stores/schedulingPages";
+import { useBookingRequests } from "../stores/bookingRequests";
 import { useEffect } from "react";
 
 function Calendar() {
@@ -33,6 +35,11 @@ function Calendar() {
       console.log(calendars.length);
       fetchInvitations();
       events.fetchPrivateEvents();
+
+      // Also fetch scheduling pages and booking data
+      useSchedulingPages.getState().fetchPages();
+      useBookingRequests.getState().fetchIncomingRequests();
+      useBookingRequests.getState().fetchOutgoingBookings();
     }
   }, [user, calendarsLoaded, calendars]);
 
