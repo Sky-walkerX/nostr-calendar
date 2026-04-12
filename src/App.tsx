@@ -26,6 +26,8 @@ import { CalendarManageDialog } from "./components/CalendarManageDialog";
 import { AppLoadingBar } from "./components/AppLoadingBar";
 import { AppStatusMessage } from "./components/AppStatusMessage";
 import { useAppStartup } from "./hooks/useAppStartup";
+import { useSchedulingPages } from "./stores/schedulingPages";
+import { useBookingRequests } from "./stores/bookingRequests";
 
 const browserLocale =
   (navigator.languages && navigator.languages[0]) ||
@@ -64,6 +66,17 @@ function Application() {
     useTimeBasedEvents.getState().loadCachedEvents();
     useRelayStore.getState().loadCachedRelays();
   }, []);
+
+  // Fetch calendar lists, scheduling pages, and bookings when user is available.
+  // This must live in App.tsx (not Calendar.tsx) so it fires on every route.
+  useEffect(() => {
+    if (user) {
+      fetchCalendars();
+      useSchedulingPages.getState().fetchPages();
+      useBookingRequests.getState().fetchIncomingRequests();
+      useBookingRequests.getState().fetchOutgoingBookings();
+    }
+  }, [user, fetchCalendars]);
 
   useEffect(() => {
     return addNotificationClickListener((eventId) => {

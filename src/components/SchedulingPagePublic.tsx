@@ -32,8 +32,9 @@ import { nostrEventToSchedulingPage } from "../utils/parser";
 import { getBookableSlots } from "../utils/availabilityHelper";
 import { useGetParticipant } from "../stores/participants";
 import { useUser } from "../stores/user";
+import { useBookingRequests } from "../stores/bookingRequests";
 import { Header } from "./Header";
-import type { ISchedulingPage, ITimeSlot } from "../utils/types";
+import type { ISchedulingPage, ITimeSlot, IOutgoingBooking } from "../utils/types";
 
 type FetchState = "loading" | "loaded" | "error";
 
@@ -91,10 +92,10 @@ export const SchedulingPagePublic = () => {
       page.durationMode === "fixed" ? (selectedDuration ?? 30) : 30;
     return getBookableSlots(
       page,
-      weekStart.valueOf(),
-      weekEnd.valueOf(),
+      weekStart.toDate(),
+      weekEnd.toDate(),
       durationMin,
-      Date.now(),
+      new Date(),
     );
   }, [page, weekStart, weekEnd, selectedDuration]);
 
@@ -138,14 +139,31 @@ export const SchedulingPagePublic = () => {
     setSubmitting(true);
     try {
       const schedulingPageRef = `${31927}:${page.user}:${page.id}`;
-      await sendBookingRequest({
+      const titleText = bookingTitle || `Meeting with ${page.title}`;
+      const giftWrap = await sendBookingRequest({
         schedulingPageRef,
         creatorPubkey: page.user,
-        start: selectedSlot.start,
-        end: selectedSlot.end,
-        title: bookingTitle || `Meeting with ${page.title}`,
+        start: selectedSlot.start.getTime(),
+        end: selectedSlot.end.getTime(),
+        title: titleText,
         note: bookingNote,
       });
+
+      // Store the outgoing booking locally so the Sent tab can display it
+      // and match responses from the creator later
+      const outgoing: IOutgoingBooking = {
+        id: giftWrap.id,
+        giftWrapId: giftWrap.id,
+        schedulingPageRef,
+        creatorPubkey: page.user,
+        start: selectedSlot.start.getTime(),
+        end: selectedSlot.end.getTime(),
+        title: titleText,
+        note: bookingNote,
+        sentAt: Date.now(),
+        status: "pending",
+      };
+      useBookingRequests.getState().addOutgoingBooking(outgoing);
 
       setBookingDialogOpen(false);
       setSelectedSlot(null);

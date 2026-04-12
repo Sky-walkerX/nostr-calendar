@@ -9,8 +9,6 @@ import { Box } from "@mui/material";
 import { SwipeableView } from "./SwipeableView";
 import { useCalendarLists } from "../stores/calendarLists";
 import { useInvitations } from "../stores/invitations";
-import { useSchedulingPages } from "../stores/schedulingPages";
-import { useBookingRequests } from "../stores/bookingRequests";
 import { useEffect } from "react";
 
 function Calendar() {
@@ -19,27 +17,12 @@ function Calendar() {
   const { calendars, isLoaded: calendarsLoaded } = useCalendarLists();
   const { fetchInvitations, stopInvitations, invitations } = useInvitations();
 
-  // When user is logged in, fetch calendar lists and invitations.
-  // Private events are fetched reactively when calendars are loaded.
-  useEffect(() => {
-    if (user) {
-      useCalendarLists.getState().fetchCalendars();
-    }
-  }, [user]);
-
-  // Fetch private events whenever visible calendars change.
-  // This ensures events update when calendars load from network
-  // or when the user toggles calendar visibility.
+  // Fetch private events and invitations whenever visible calendars change.
+  // Calendar list fetching is handled in App.tsx so it works on every route.
   useEffect(() => {
     if (user && calendarsLoaded) {
-      console.log(calendars.length);
       fetchInvitations();
       events.fetchPrivateEvents();
-
-      // Also fetch scheduling pages and booking data
-      useSchedulingPages.getState().fetchPages();
-      useBookingRequests.getState().fetchIncomingRequests();
-      useBookingRequests.getState().fetchOutgoingBookings();
     }
   }, [user, calendarsLoaded, calendars]);
 

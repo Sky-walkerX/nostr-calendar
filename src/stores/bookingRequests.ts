@@ -61,6 +61,7 @@ interface BookingRequestsState {
   loadCached: () => Promise<void>;
   fetchIncomingRequests: () => Promise<void>;
   fetchOutgoingBookings: () => Promise<void>;
+  addOutgoingBooking: (booking: IOutgoingBooking) => void;
   approveRequest: (requestId: string, calendarId: string) => Promise<void>;
   declineRequest: (requestId: string, reason?: string) => Promise<void>;
   checkExpiry: () => void;
@@ -158,6 +159,16 @@ export const useBookingRequests = create<BookingRequestsState>((set, get) => ({
       // Run immediately too
       get().checkExpiry();
     }
+  },
+
+  addOutgoingBooking: (booking) => {
+    set((state) => {
+      // Avoid duplicates
+      if (state.outgoingBookings.some((b) => b.id === booking.id)) return state;
+      const outgoingBookings = [...state.outgoingBookings, booking];
+      saveOutgoingToStorage(outgoingBookings);
+      return { outgoingBookings };
+    });
   },
 
   fetchOutgoingBookings: async () => {

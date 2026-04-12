@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
   Box,
@@ -23,6 +23,8 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+dayjs.extend(relativeTime);
 import { useBookingRequests } from "../stores/bookingRequests";
 import { useSchedulingPages } from "../stores/schedulingPages";
 import { useCalendarLists } from "../stores/calendarLists";
@@ -54,25 +56,15 @@ export const BookingsPage = () => {
     outgoingBookings,
     isLoaded,
     loadCached,
-    fetchIncomingRequests,
-    fetchOutgoingBookings,
   } = useBookingRequests();
 
-  const { pages, isLoaded: pagesLoaded, fetchPages } = useSchedulingPages();
+  const { pages } = useSchedulingPages();
   const { calendars, isLoaded: calendarsLoaded } = useCalendarLists();
 
+  // Load cached data on mount. Network fetching is handled by App.tsx.
   useEffect(() => {
     loadCached();
-    fetchIncomingRequests();
-    fetchOutgoingBookings();
-    if (!pagesLoaded) fetchPages();
-  }, [
-    loadCached,
-    fetchIncomingRequests,
-    fetchOutgoingBookings,
-    pagesLoaded,
-    fetchPages,
-  ]);
+  }, [loadCached]);
 
   const pendingIncoming = incomingRequests.filter(
     (r) => r.status === "pending",
@@ -224,6 +216,7 @@ function IncomingRequestCard({
     calendars[0]?.id || "",
   );
   const [processing, setProcessing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   // Find which scheduling page this request is for
   const pageRef = request.schedulingPageRef;
@@ -231,12 +224,18 @@ function IncomingRequestCard({
   const matchingPage = pages.find((p) => p.id === pageId);
 
   const handleApprove = async () => {
+    if (!selectedCalendarId) {
+      setErrorMsg("Please select a calendar first. If none appear, create one from the sidebar.");
+      return;
+    }
     setProcessing(true);
+    setErrorMsg("");
     try {
       await approveRequest(request.id, selectedCalendarId);
       setApproveDialogOpen(false);
     } catch (e) {
       console.error(e);
+      setErrorMsg(e instanceof Error ? e.message : "Failed to approve booking. Please try again.");
     } finally {
       setProcessing(false);
     }
@@ -244,12 +243,14 @@ function IncomingRequestCard({
 
   const handleDecline = async () => {
     setProcessing(true);
+    setErrorMsg("");
     try {
       await declineRequest(request.id, declineReason || undefined);
       setDeclineDialogOpen(false);
       setDeclineReason("");
     } catch (e) {
       console.error(e);
+      setErrorMsg(e instanceof Error ? e.message : "Failed to decline booking. Please try again.");
     } finally {
       setProcessing(false);
     }
@@ -360,12 +361,21 @@ function IncomingRequestCard({
           <Typography variant="body2" sx={{ mb: 2 }}>
             This will create a private calendar event and notify the booker.
           </Typography>
-          {calendarsLoaded && calendars.length > 0 && (
+          {calendarsLoaded && calendars.length > 0 ? (
             <CalendarListSelect
               value={selectedCalendarId}
               onChange={setSelectedCalendarId}
               label="Add to calendar"
             />
+          ) : (
+            <Typography variant="body2" color="error" sx={{ mt: 1 }}>
+              No calendars found. Please create a calendar first from the sidebar.
+            </Typography>
+          )}
+          {errorMsg && (
+            <Typography variant="body2" color="error" sx={{ mt: 1 }}>
+              {errorMsg}
+            </Typography>
           )}
         </DialogContent>
         <DialogActions>
@@ -375,7 +385,7 @@ function IncomingRequestCard({
           <Button
             variant="contained"
             onClick={handleApprove}
-            disabled={processing}
+            disabled={processing || !selectedCalendarId}
           >
             {processing ? "Approving..." : "Approve"}
           </Button>
