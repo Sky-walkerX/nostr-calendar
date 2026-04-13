@@ -170,7 +170,7 @@ export function CalendarEventEdit({
           await publishPrivateCalendarEvent(eventToSave, selectedCalendarId);
         }
       } else {
-        await publishPublicCalendarEvent(eventToSave);
+        await publishPublicCalendarEvent(eventToSave, selectedCalendarId);
       }
 
       if (onSave) {
