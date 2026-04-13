@@ -512,16 +512,14 @@ export function CalendarEventEdit({
         />
       </Box>
 
-      {/* Calendar Selector — only shown for private events */}
-      {isPrivate && (
-        <Box>
-          <CalendarListSelect
-            value={selectedCalendarId}
-            onChange={setSelectedCalendarId}
-            label={intl.formatMessage({ id: "event.calendar" })}
-          />
-        </Box>
-      )}
+      {/* Calendar Selector */}
+      <Box>
+        <CalendarListSelect
+          value={selectedCalendarId}
+          onChange={setSelectedCalendarId}
+          label={intl.formatMessage({ id: "event.calendar" })}
+        />
+      </Box>
       <Divider />
 
       {/* Privacy Toggle */}

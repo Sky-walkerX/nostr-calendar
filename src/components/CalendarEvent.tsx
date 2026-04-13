@@ -549,7 +549,7 @@ function InvitationAcceptBar({ event }: { event: ICalendarEvent }) {
   const intl = useIntl();
   const navigate = useNavigate();
   const { user, updateLoginModal } = useUser();
-  const { calendars, addEventToCalendar } = useCalendarLists();
+  const { calendars, addEventToCalendar, isLoaded: calendarsLoaded, fetchCalendars } = useCalendarLists();
   const { invitations, acceptInvitation } = useInvitations();
   const { updateEvent } = useTimeBasedEvents();
   const [selectedCalendarId, setSelectedCalendarId] = useState(
@@ -566,6 +566,14 @@ function InvitationAcceptBar({ event }: { event: ICalendarEvent }) {
       setSelectedCalendarId(calendars[0].id);
     }
   }, [calendars, selectedCalendarId]);
+
+  // On ViewEventPage the Calendar component is never mounted, so
+  // fetchCalendars() is never called. Trigger it here when needed.
+  useEffect(() => {
+    if (user && !calendarsLoaded) {
+      fetchCalendars();
+    }
+  }, [user, calendarsLoaded, fetchCalendars]);
 
   const handleAccept = async () => {
     if (!selectedCalendarId) return;
