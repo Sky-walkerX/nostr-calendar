@@ -1,6 +1,7 @@
 // import { useDraggable } from "@dnd-kit/core";
 import {
   alpha,
+  Alert,
   Box,
   Button,
   Dialog,
@@ -10,6 +11,7 @@ import {
   IconButton,
   Link,
   Paper,
+  Snackbar,
   Stack,
   Theme,
   Tooltip,
@@ -50,6 +52,7 @@ import {
   getCalendarEventCoordinate,
 } from "../utils/calendarListTypes";
 import { EventCalendarListManagement } from "./EventCalendarListManagement";
+import { useTimeBasedEvents } from "../stores/events";
 
 interface CalendarEventCardProps {
   event: PositionedEvent;
@@ -540,69 +543,105 @@ function ScheduledNotificationsSection({ eventId }: { eventId: string }) {
 
 function InvitationAcceptBar({ event }: { event: ICalendarEvent }) {
   const intl = useIntl();
-  const { calendars } = useCalendarLists();
-  const { acceptInvitation } = useInvitations();
+  const { calendars, addEventToCalendar } = useCalendarLists();
+  const { invitations, acceptInvitation } = useInvitations();
+  const { updateEvent } = useTimeBasedEvents();
   const [selectedCalendarId, setSelectedCalendarId] = useState(
     calendars[0]?.id || "",
   );
   const [accepting, setAccepting] = useState(false);
+  const [errorOpen, setErrorOpen] = useState(false);
 
   const handleAccept = async () => {
     if (!selectedCalendarId) return;
     setAccepting(true);
-    await acceptInvitation(event.id, selectedCalendarId);
-    setAccepting(false);
+    try {
+      // If there is a matching gift-wrap invitation in the store, use the full
+      // invitation flow so the record is removed from the notifications panel.
+      // Otherwise (shared-link context) build the event reference directly.
+      const matchingInvitation = invitations.find(
+        (inv) => inv.eventId === event.id && inv.pubkey === event.user,
+      );
+      if (matchingInvitation) {
+        await acceptInvitation(matchingInvitation.giftWrapId, selectedCalendarId);
+      } else {
+        const eventRef = buildEventRef({
+          kind: event.kind,
+          authorPubkey: event.user,
+          eventDTag: event.id,
+          viewKey: event.viewKey || "",
+        });
+        await addEventToCalendar(selectedCalendarId, eventRef);
+        updateEvent({ ...event, calendarId: selectedCalendarId, isInvitation: false });
+      }
+    } catch {
+      setErrorOpen(true);
+    } finally {
+      setAccepting(false);
+    }
   };
 
   return (
-    <Stack
-      spacing={1.5}
-      sx={{
-        backgroundColor: "action.hover",
-        borderRadius: 1,
-        p: 1.5,
-      }}
-    >
-      <Box display="flex" alignItems="center" gap={0.5} flexWrap="wrap">
-        <Typography
-          variant="body1"
-          color="text.primary"
-          sx={{
-            display: "flex",
-            gap: "4px",
-            alignItems: "center",
-          }}
-          component="span"
-        >
-          <FormattedMessage
-            id="invitation.invitedBy"
-            values={{
-              participant: <Participant pubKey={event.user} isAuthor={false} />,
+    <>
+      <Stack
+        spacing={1.5}
+        sx={{
+          backgroundColor: "action.hover",
+          borderRadius: 1,
+          p: 1.5,
+        }}
+      >
+        <Box display="flex" alignItems="center" gap={0.5} flexWrap="wrap">
+          <Typography
+            variant="body1"
+            color="text.primary"
+            sx={{
+              display: "flex",
+              gap: "4px",
+              alignItems: "center",
             }}
-          />
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {intl.formatMessage({ id: "event.notInCalendar" })}
-        </Typography>
-      </Box>
-      <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
-        <Box maxWidth={500} flex={1} minWidth={150}>
-          <CalendarListSelect
-            value={selectedCalendarId}
-            onChange={setSelectedCalendarId}
-            size="small"
-          />
+            component="span"
+          >
+            <FormattedMessage
+              id={event.isInvitation ? "invitation.invitedBy" : "invitation.createdBy"}
+              values={{
+                participant: <Participant pubKey={event.user} isAuthor={false} />,
+              }}
+            />
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {intl.formatMessage({ id: "event.notInCalendar" })}
+          </Typography>
         </Box>
-        <Button
-          variant="contained"
-          size="small"
-          disabled={!selectedCalendarId || accepting}
-          onClick={handleAccept}
-          sx={{ flexShrink: 0, whiteSpace: "nowrap" }}
-        >
-          {intl.formatMessage({ id: "invitation.acceptInvitation" })}
-        </Button>
-      </Box>
-    </Stack>
+        <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+          <Box maxWidth={500} flex={1} minWidth={150}>
+            <CalendarListSelect
+              value={selectedCalendarId}
+              onChange={setSelectedCalendarId}
+              size="small"
+            />
+          </Box>
+          <Button
+            variant="contained"
+            size="small"
+            disabled={!selectedCalendarId || accepting}
+            onClick={handleAccept}
+            sx={{ flexShrink: 0, whiteSpace: "nowrap" }}
+          >
+            {intl.formatMessage({ id: "invitation.acceptInvitation" })}
+          </Button>
+        </Box>
+      </Stack>
+
+      <Snackbar
+        open={errorOpen}
+        autoHideDuration={4000}
+        onClose={() => setErrorOpen(false)}
+      >
+        <Alert severity="error" onClose={() => setErrorOpen(false)}>
+          {intl.formatMessage({ id: "event.calendarMoveError" })}
+        </Alert>
+      </Snackbar>
+    </>
   );
 }
