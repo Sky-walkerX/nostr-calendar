@@ -18,6 +18,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useCalendarLists } from "./calendarLists";
 import { useInvitations } from "./invitations";
 import { buildEventRef } from "../utils/calendarListTypes";
+import type { IInvitation } from "../utils/calendarListTypes";
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
@@ -178,7 +179,7 @@ describe("shared-link add-to-calendar (direct store path)", () => {
 
   it("gift-wrap invitation path still resolves via giftWrapId (regression)", async () => {
     const event = makePrivateEvent("nsec1testinvitekey");
-    const gift: Parameters<typeof useInvitations.setState>[0]["invitations"][0] = {
+    const gift: IInvitation = {
       originalInvitationId: "inner-event-id",
       giftWrapId: "gift-wrap-nostr-event-id",
       eventId: event.id,

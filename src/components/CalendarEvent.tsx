@@ -54,7 +54,6 @@ import {
   getCalendarEventCoordinate,
 } from "../utils/calendarListTypes";
 import { EventCalendarListManagement } from "./EventCalendarListManagement";
-import { useTimeBasedEvents } from "../stores/events";
 import { signerManager } from "../common/signer";
 import { generateSecretKey } from "nostr-tools";
 import { bytesToHex } from "nostr-tools/utils";
@@ -548,6 +547,7 @@ function ScheduledNotificationsSection({ eventId }: { eventId: string }) {
 
 function InvitationAcceptBar({ event }: { event: ICalendarEvent }) {
   const intl = useIntl();
+  const navigate = useNavigate();
   const { user, updateLoginModal } = useUser();
   const { calendars, addEventToCalendar } = useCalendarLists();
   const { invitations, acceptInvitation } = useInvitations();
