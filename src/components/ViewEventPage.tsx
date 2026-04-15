@@ -12,7 +12,7 @@ import { useIntl } from "react-intl";
 interface ILoadState {
   event: ICalendarEvent | null;
   fetchState: "loading" | "fetched" | "error";
-  error: typeof Error | null;
+  error: Error | null;
 }
 
 const getInitialLoadState = (): ILoadState => ({
@@ -86,8 +86,8 @@ export const ViewEventPage = () => {
       .catch((e) => {
         updateCalendarEventLoadState((state) => ({
           ...state,
-          error: Error,
-          fetchState: "fetched",
+          error: e instanceof Error ? e : new Error(String(e)),
+          fetchState: "error",
         }));
         console.error(e);
       });
