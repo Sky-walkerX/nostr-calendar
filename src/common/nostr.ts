@@ -551,7 +551,7 @@ export const publishPublicCalendarEvent = async (
   onAcceptedRelays?: (url: string) => void,
 ) => {
   const pubKey = await getUserPublicKey();
-  const id = event.id !== TEMP_CALENDAR_ID ? event.id : uuid();
+  const id = event?.id !== TEMP_CALENDAR_ID ? event.id : uuid();
   const tags = [
     ["name", event.title],
     ["d", id],
@@ -583,7 +583,9 @@ export const publishPublicCalendarEvent = async (
   const signer = await signerManager.getSigner();
   const fullEvent = await signer.signEvent(baseEvent);
   fullEvent.id = getEventHash(baseEvent);
-  return publishToRelays(fullEvent, onAcceptedRelays);
+  const result = await publishToRelays(fullEvent, onAcceptedRelays);
+
+  return { result, id, pubKey };
 };
 
 /**

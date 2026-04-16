@@ -152,6 +152,11 @@ const dictionary: NestedObject = {
       dismiss: "Dismiss",
       acceptInvitation: "Add to Calendar",
       invitedBy: "You have been invited by {participant} to this event",
+      createdBy: "Shared by {participant}",
+      loginToAdd: "Log in to add this event to your calendar",
+      addedToCalendar: "Event added to your calendar",
+      viewInCalendar: "View in Calendar",
+      stayHere: "Stay Here",
     },
     login: {
       signInToFormstr: "Sign in to Formstr",
@@ -346,6 +351,11 @@ const dictionary: NestedObject = {
       dismiss: "Verwerfen",
       acceptInvitation: "Zum Kalender hinzufügen",
       invitedBy: "Sie wurden von {participant} zu diesem Termin eingeladen",
+      createdBy: "Geteilt von {participant}",
+      loginToAdd: "Melden Sie sich an, um diesen Termin zu Ihrem Kalender hinzuzufügen",
+      addedToCalendar: "Termin wurde Ihrem Kalender hinzugefügt",
+      viewInCalendar: "Im Kalender anzeigen",
+      stayHere: "Hier bleiben",
     },
     login: {
       signInToFormstr: "Bei Formstr anmelden",

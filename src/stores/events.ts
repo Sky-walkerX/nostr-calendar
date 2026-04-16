@@ -330,14 +330,16 @@ export const useTimeBasedEvents = create<{
         }
         const meta = dTag ? viewKeyMap.get(dTag) : undefined;
         if (meta) {
-          const decrypted = viewPrivateEvent(event, meta.viewKey);
-          processPrivateEvent(
-            decrypted,
-            timeRange,
-            meta.viewKey,
-            meta.calendarId,
-            meta.relayUrl,
-          );
+          if (meta.viewKey) {
+            const decrypted = viewPrivateEvent(event, meta.viewKey);
+            processPrivateEvent(
+              decrypted,
+              timeRange,
+              meta.viewKey,
+              meta.calendarId,
+              meta.relayUrl,
+            );
+          }
           processedEventIds.add(dTag);
         }
       },
