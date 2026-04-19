@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
 import {
   Box,
   Typography,
@@ -26,20 +26,100 @@ import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import dayjs, { Dayjs } from "dayjs";
-import { NAddr } from "nostr-tools/nip19";
-import { fetchSchedulingPage, sendBookingRequest } from "../common/nostr";
+import { NAddr, decode } from "nostr-tools/nip19";
+import {
+  getUserPublicKey,
+  getRelays,
+  publishToRelays,
+  defaultRelays,
+} from "../common/nostr";
+import * as nip59 from "../common/nip59";
+import { nostrRuntime } from "../common/nostrRuntime";
+import { EventKinds } from "../common/EventConfigs";
 import { nostrEventToSchedulingPage } from "../utils/parser";
 import { getBookableSlots } from "../utils/availabilityHelper";
 import { useGetParticipant } from "../stores/participants";
 import { useUser } from "../stores/user";
 import { useBookingRequests } from "../stores/bookingRequests";
+import { useCalendarLists } from "../stores/calendarLists";
+import { buildEventRef } from "../utils/calendarListTypes";
 import { Header } from "./Header";
-import type { ISchedulingPage, ITimeSlot, IOutgoingBooking } from "../utils/types";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
+import { nip44, getPublicKey } from "nostr-tools";
+import { hexToBytes } from "@noble/hashes/utils.js";
+import type { Event, Filter } from "nostr-tools";
+import type {
+  ISchedulingPage,
+  ITimeSlot,
+  IOutgoingBooking,
+} from "../utils/types";
+
+async function fetchSchedulingPage(naddr: NAddr): Promise<Event> {
+  const { data } = decode(naddr as NAddr);
+  const relays = data.relays ?? defaultRelays;
+  const filter: Filter = {
+    "#d": [data.identifier],
+    kinds: [EventKinds.SchedulingPage],
+    authors: [data.pubkey],
+  };
+  const event = await nostrRuntime.fetchOne(relays, filter);
+  if (!event) throw new Error("SCHEDULING_PAGE_NOT_FOUND");
+  return event;
+}
+
+async function sendBookingRequest({
+  schedulingPageRef,
+  creatorPubkey,
+  start,
+  end,
+  title,
+  note,
+  dTag,
+  relayHints,
+}: {
+  schedulingPageRef: string;
+  creatorPubkey: string;
+  start: number;
+  end: number;
+  title: string;
+  note: string;
+  dTag: string;
+  relayHints?: string[];
+}): Promise<Event> {
+  const userPublicKey = await getUserPublicKey();
+  const giftWrap = await nip59.wrapEvent(
+    {
+      pubkey: userPublicKey,
+      created_at: Math.floor(Date.now() / 1000),
+      kind: EventKinds.BookingRequestRumor,
+      content: "",
+      tags: [
+        ["a", schedulingPageRef],
+        ["start", String(Math.floor(start / 1000))],
+        ["end", String(Math.floor(end / 1000))],
+        ["title", title],
+        ["note", note],
+        ["d", dTag],
+      ],
+    },
+    creatorPubkey,
+    EventKinds.BookingRequestGiftWrap,
+    true,
+  );
+  const targetRelays = relayHints
+    ? [...new Set([...relayHints, ...getRelays()])]
+    : undefined;
+  await publishToRelays(giftWrap, undefined, targetRelays);
+  return giftWrap;
+}
 
 type FetchState = "loading" | "loaded" | "error";
 
 export const SchedulingPagePublic = () => {
   const { naddr } = useParams<{ naddr: string }>();
+  const [searchParams] = useSearchParams();
+  const viewKey = searchParams.get("viewKey");
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { user, updateLoginModal } = useUser();
@@ -65,7 +145,26 @@ export const SchedulingPagePublic = () => {
     setFetchState("loading");
     fetchSchedulingPage(naddr as NAddr)
       .then((event) => {
-        const parsed = nostrEventToSchedulingPage(event);
+        let eventToProcess = event;
+        // Decrypt private scheduling page if viewKey is provided
+        if (viewKey) {
+          try {
+            const viewSecretKey = hexToBytes(viewKey);
+            const viewPublicKey = getPublicKey(viewSecretKey);
+            const conversationKey = nip44.getConversationKey(
+              viewSecretKey,
+              viewPublicKey,
+            );
+            const decryptedTags = JSON.parse(
+              nip44.decrypt(event.content, conversationKey),
+            );
+            eventToProcess = { ...event, tags: decryptedTags };
+          } catch {
+            setFetchState("error");
+            return;
+          }
+        }
+        const parsed = nostrEventToSchedulingPage(eventToProcess);
         setPage(parsed);
         // Default to first slot duration if fixed mode
         if (
@@ -139,7 +238,19 @@ export const SchedulingPagePublic = () => {
     setSubmitting(true);
     try {
       const schedulingPageRef = `${31927}:${page.user}:${page.id}`;
-      const titleText = bookingTitle || `Meeting with ${page.title}`;
+      const titleText =
+        bookingTitle || page.eventTitle || `Meeting with ${page.title}`;
+
+      // Generate a d-tag for the future calendar event.
+      // The creator will use this d-tag when creating the event so it
+      // automatically resolves in the booker's calendar list.
+      const dTagRoot = `booking-${schedulingPageRef}-${selectedSlot.start.getTime()}-${Date.now()}`;
+      const dTag = bytesToHex(sha256(utf8ToBytes(dTagRoot))).substring(0, 30);
+
+      // Extract relay hints from the scheduling page event tags
+      const relayHints = (page as ISchedulingPage & { relayHints?: string[] })
+        .relayHints;
+
       const giftWrap = await sendBookingRequest({
         schedulingPageRef,
         creatorPubkey: page.user,
@@ -147,10 +258,26 @@ export const SchedulingPagePublic = () => {
         end: selectedSlot.end.getTime(),
         title: titleText,
         note: bookingNote,
+        dTag,
+        relayHints,
       });
 
+      // Add a placeholder event reference to the booker's calendar list.
+      // When the creator approves and publishes the event using this d-tag,
+      // the invitation gift wrap will provide the viewKey for decryption.
+      const calendarLists = useCalendarLists.getState();
+      if (calendarLists.calendars.length > 0) {
+        const defaultCalendarId = calendarLists.calendars[0].id;
+        const eventRef = buildEventRef({
+          kind: EventKinds.PrivateCalendarEvent,
+          authorPubkey: page.user,
+          eventDTag: dTag,
+          viewKey: "",
+        });
+        await calendarLists.addEventToCalendar(defaultCalendarId, eventRef);
+      }
+
       // Store the outgoing booking locally so the Sent tab can display it
-      // and match responses from the creator later
       const outgoing: IOutgoingBooking = {
         id: giftWrap.id,
         giftWrapId: giftWrap.id,

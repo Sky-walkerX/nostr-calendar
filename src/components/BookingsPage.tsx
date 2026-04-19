@@ -68,26 +68,19 @@ export const BookingsPage = () => {
     loadCached();
   }, [loadCached]);
 
-  // Keep booking subscriptions fresh while this page is open so
-  // incoming requests appear without manual reload.
+  // Ensure subscriptions are active. Since these are websocket connections,
+  // new events are automatically pushed to the store — no polling needed.
   useEffect(() => {
     fetchIncomingRequests();
     fetchOutgoingBookings();
-
-    const refreshTimer = setInterval(() => {
-      fetchIncomingRequests();
-      fetchOutgoingBookings();
-    }, 30_000);
-
-    return () => clearInterval(refreshTimer);
   }, [fetchIncomingRequests, fetchOutgoingBookings]);
 
-  const pendingIncoming = incomingRequests.filter(
-    (r) => r.status === "pending",
+  // Sort by receivedAt descending (latest first)
+  const sortedIncoming = [...incomingRequests].sort(
+    (a, b) => b.receivedAt - a.receivedAt,
   );
-  const resolvedIncoming = incomingRequests.filter(
-    (r) => r.status !== "pending",
-  );
+  const pendingIncoming = sortedIncoming.filter((r) => r.status === "pending");
+  const resolvedIncoming = sortedIncoming.filter((r) => r.status !== "pending");
 
   return (
     <>
@@ -241,7 +234,9 @@ function IncomingRequestCard({
 
   const handleApprove = async () => {
     if (!selectedCalendarId) {
-      setErrorMsg("Please select a calendar first. If none appear, create one from the sidebar.");
+      setErrorMsg(
+        "Please select a calendar first. If none appear, create one from the sidebar.",
+      );
       return;
     }
     setProcessing(true);
@@ -251,7 +246,11 @@ function IncomingRequestCard({
       setApproveDialogOpen(false);
     } catch (e) {
       console.error(e);
-      setErrorMsg(e instanceof Error ? e.message : "Failed to approve booking. Please try again.");
+      setErrorMsg(
+        e instanceof Error
+          ? e.message
+          : "Failed to approve booking. Please try again.",
+      );
     } finally {
       setProcessing(false);
     }
@@ -266,7 +265,11 @@ function IncomingRequestCard({
       setDeclineReason("");
     } catch (e) {
       console.error(e);
-      setErrorMsg(e instanceof Error ? e.message : "Failed to decline booking. Please try again.");
+      setErrorMsg(
+        e instanceof Error
+          ? e.message
+          : "Failed to decline booking. Please try again.",
+      );
     } finally {
       setProcessing(false);
     }
@@ -385,7 +388,8 @@ function IncomingRequestCard({
             />
           ) : (
             <Typography variant="body2" color="error" sx={{ mt: 1 }}>
-              No calendars found. Please create a calendar first from the sidebar.
+              No calendars found. Please create a calendar first from the
+              sidebar.
             </Typography>
           )}
           {errorMsg && (

@@ -27,7 +27,8 @@ export const SchedulingPagesList = ({
   onNavigate,
 }: SchedulingPagesListProps) => {
   const navigate = useNavigate();
-  const { pages, isLoaded, deletePage, getNAddr } = useSchedulingPages();
+  const { pages, isLoaded, deletePage, getNAddr, getPageUrl } =
+    useSchedulingPages();
 
   const handleCreate = () => {
     navigate(ROUTES.SchedulingPageCreate);
@@ -44,7 +45,7 @@ export const SchedulingPagesList = ({
   const handleCopyLink = (pageId: string) => {
     const page = pages.find((p) => p.id === pageId);
     if (!page) return;
-    const url = `${window.location.origin}/schedule/${getNAddr(page)}`;
+    const url = getPageUrl(page);
     navigator.clipboard.writeText(url);
   };
 

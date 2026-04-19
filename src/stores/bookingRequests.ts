@@ -17,13 +17,13 @@ import { create } from "zustand";
 import { getSecureItem, setSecureItem } from "../common/localStorage";
 import {
   getUserPublicKey,
-  subscribeBookingRequests,
-  subscribeBookingResponses,
-  unwrapBookingRequest,
-  unwrapBookingResponse,
-  sendBookingResponse,
   publishPrivateCalendarEvent,
+  getRelays,
+  publishToRelays,
 } from "../common/nostr";
+import * as nip59 from "../common/nip59";
+import { EventKinds } from "../common/EventConfigs";
+import { nostrRuntime } from "../common/nostrRuntime";
 import type {
   IBookingRequest,
   IOutgoingBooking,
@@ -33,6 +33,127 @@ import { TEMP_CALENDAR_ID } from "./eventDetails";
 import type { SubscriptionHandle } from "../common/nostrRuntime";
 import { useSchedulingPages } from "./schedulingPages";
 import { Event } from "nostr-tools";
+
+function subscribeBookingRequests(
+  pubkey: string,
+  onEvent: (event: Event) => void,
+  onEose?: () => void,
+) {
+  const relayList = getRelays();
+  const filter = {
+    kinds: [EventKinds.BookingRequestGiftWrap],
+    "#p": [pubkey],
+    limit: 50,
+  };
+  return nostrRuntime.subscribe(relayList, [filter], { onEvent, onEose });
+}
+
+function subscribeBookingResponses(
+  pubkey: string,
+  onEvent: (event: Event) => void,
+  onEose?: () => void,
+) {
+  const relayList = getRelays();
+  const filter = {
+    kinds: [EventKinds.BookingResponseGiftWrap],
+    "#p": [pubkey],
+    limit: 50,
+  };
+  return nostrRuntime.subscribe(relayList, [filter], { onEvent, onEose });
+}
+
+async function unwrapBookingRequest(giftWrap: Event): Promise<{
+  schedulingPageRef: string;
+  bookerPubkey: string;
+  start: number;
+  end: number;
+  title: string;
+  note: string;
+  dTag: string;
+}> {
+  const rumor = await nip59.unwrapEvent(giftWrap);
+  const getTag = (name: string) =>
+    rumor.tags.find((t) => t[0] === name)?.[1] ?? "";
+  return {
+    schedulingPageRef: getTag("a"),
+    bookerPubkey: rumor.pubkey,
+    start: Number(getTag("start")) * 1000,
+    end: Number(getTag("end")) * 1000,
+    title: getTag("title"),
+    note: getTag("note"),
+    dTag: getTag("d"),
+  };
+}
+
+async function unwrapBookingResponse(giftWrap: Event): Promise<{
+  schedulingPageRef: string;
+  creatorPubkey: string;
+  start: number;
+  end: number;
+  status: "approved" | "declined";
+  eventRef?: string;
+  viewKey?: string;
+  reason?: string;
+}> {
+  const rumor = await nip59.unwrapEvent(giftWrap);
+  const getTag = (name: string) =>
+    rumor.tags.find((t) => t[0] === name)?.[1] ?? "";
+  return {
+    schedulingPageRef: getTag("a"),
+    creatorPubkey: rumor.pubkey,
+    start: Number(getTag("start")) * 1000,
+    end: Number(getTag("end")) * 1000,
+    status: getTag("status") as "approved" | "declined",
+    eventRef: getTag("event_ref") || undefined,
+    viewKey: getTag("viewKey") || undefined,
+    reason: getTag("reason") || undefined,
+  };
+}
+
+async function sendBookingResponse({
+  schedulingPageRef,
+  bookerPubkey,
+  start,
+  end,
+  status,
+  eventRef,
+  viewKey,
+  reason,
+}: {
+  schedulingPageRef: string;
+  bookerPubkey: string;
+  start: number;
+  end: number;
+  status: "approved" | "declined";
+  eventRef?: string;
+  viewKey?: string;
+  reason?: string;
+}): Promise<Event> {
+  const userPublicKey = await getUserPublicKey();
+  const tags: string[][] = [
+    ["a", schedulingPageRef],
+    ["start", String(Math.floor(start / 1000))],
+    ["end", String(Math.floor(end / 1000))],
+    ["status", status],
+  ];
+  if (status === "approved" && eventRef) tags.push(["event_ref", eventRef]);
+  if (status === "approved" && viewKey) tags.push(["viewKey", viewKey]);
+  if (status === "declined" && reason) tags.push(["reason", reason]);
+
+  const giftWrap = await nip59.wrapEvent(
+    {
+      pubkey: userPublicKey,
+      created_at: Math.floor(Date.now() / 1000),
+      kind: EventKinds.BookingResponseRumor,
+      content: "",
+      tags,
+    },
+    bookerPubkey,
+    EventKinds.BookingResponseGiftWrap,
+  );
+  await publishToRelays(giftWrap);
+  return giftWrap;
+}
 
 const INCOMING_STORAGE_KEY = "cal:booking_requests_incoming";
 const OUTGOING_STORAGE_KEY = "cal:booking_requests_outgoing";
@@ -99,9 +220,8 @@ export const useBookingRequests = create<BookingRequestsState>((set, get) => ({
   },
 
   fetchIncomingRequests: async () => {
-    if (incomingSubHandle) {
-      incomingSubHandle.unsubscribe();
-    }
+    if (incomingSubHandle) return;
+    if (!get().isLoaded) await get().loadCached();
 
     const userPubkey = await getUserPublicKey();
     if (!userPubkey) return;
@@ -130,7 +250,8 @@ export const useBookingRequests = create<BookingRequestsState>((set, get) => ({
             end: details.end,
             title: details.title,
             note: details.note,
-            receivedAt: Date.now(),
+            dTag: details.dTag,
+            receivedAt: giftWrap.created_at * 1000,
             status: "pending",
           };
 
@@ -172,9 +293,8 @@ export const useBookingRequests = create<BookingRequestsState>((set, get) => ({
   },
 
   fetchOutgoingBookings: async () => {
-    if (outgoingSubHandle) {
-      outgoingSubHandle.unsubscribe();
-    }
+    if (outgoingSubHandle) return;
+    if (!get().isLoaded) await get().loadCached();
 
     const userPubkey = await getUserPublicKey();
     if (!userPubkey) return;
@@ -227,6 +347,8 @@ export const useBookingRequests = create<BookingRequestsState>((set, get) => ({
     if (!request || request.status !== "pending") return;
 
     // Create a private calendar event for this appointment
+    // using the booker's pre-generated d-tag so the event
+    // auto-appears in the booker's calendar list.
     const event: ICalendarEvent = {
       id: TEMP_CALENDAR_ID,
       eventId: "",
@@ -249,24 +371,15 @@ export const useBookingRequests = create<BookingRequestsState>((set, get) => ({
       image: undefined,
     };
 
-    const result = await publishPrivateCalendarEvent(event, calendarId);
-
-    // Extract event ref info from the published event
-    const userPubkey = await getUserPublicKey();
-    const dTag = result.calendarEvent.tags.find((t) => t[0] === "d")?.[1] ?? "";
-    const eventRef = `32678:${userPubkey}:${dTag}`;
-
-    // Find the view key from the gift wraps (it's encoded in the rumor)
-    // The publishPrivateCalendarEvent already sent invitation gift wraps
-    // Now send the booking response with approved status
-    await sendBookingResponse({
-      schedulingPageRef: request.schedulingPageRef,
-      bookerPubkey: request.bookerPubkey,
-      start: request.start,
-      end: request.end,
-      status: "approved",
-      eventRef,
-    });
+    // Pass the booker's d-tag so the published event uses it.
+    // publishPrivateCalendarEvent already sends invitation gift wraps
+    // with viewKey to all participants (including booker), so the
+    // booker's calendar will pick it up automatically.
+    await publishPrivateCalendarEvent(
+      event,
+      calendarId,
+      request.dTag || undefined,
+    );
 
     // Update request status
     set((state) => {

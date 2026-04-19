@@ -79,6 +79,7 @@ export function createWrap(
   seal: NostrEvent,
   recipientPublicKey: string,
   kind: number,
+  useRealTimestamp?: boolean,
 ) {
   const randomKey = generateSecretKey();
 
@@ -86,7 +87,7 @@ export function createWrap(
     {
       kind,
       content: nip44Encrypt(seal, randomKey, recipientPublicKey),
-      created_at: randomNow(),
+      created_at: useRealTimestamp ? now() : randomNow(),
       tags: [["p", recipientPublicKey]],
     },
     randomKey,
@@ -97,11 +98,12 @@ export async function wrapEvent(
   event: Partial<UnsignedEvent>,
   recipientPublicKey: string,
   kind: number,
+  useRealTimestamp?: boolean,
 ) {
   const rumor = await createRumor(event);
 
   const seal = await createSeal(rumor, recipientPublicKey);
-  return createWrap(seal, recipientPublicKey, kind);
+  return createWrap(seal, recipientPublicKey, kind, useRealTimestamp);
 }
 
 export async function wrapManyEvents(
