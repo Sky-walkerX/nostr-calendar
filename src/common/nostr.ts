@@ -31,6 +31,12 @@ import { useCalendarLists } from "../stores/calendarLists";
 import { buildEventRef } from "../utils/calendarListTypes";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
+import {
+  busyListToTags,
+  busyListDTag,
+  nostrEventToBusyList,
+} from "../utils/parser";
+import type { IBusyList } from "../utils/types";
 
 export const defaultRelays = [
   "wss://relay.damus.io/",
@@ -786,3 +792,49 @@ export const publishRelayList = async (relays: string[]): Promise<void> => {
   const allRelays = [...new Set([...relays, ...defaultRelays])];
   await publishToRelays(fullEvent, () => {}, allRelays);
 };
+
+// --- Public Busy List (kind 31926) ---
+
+/**
+ * Publishes a public busy list event (kind 31926) for one calendar month.
+ * Replaces any prior version (parameterized-replaceable per `(pubkey, d)`).
+ */
+export async function publishBusyList(list: IBusyList): Promise<Event> {
+  const pubKey = await getUserPublicKey();
+  const baseEvent: UnsignedEvent = {
+    kind: EventKinds.PublicBusyList,
+    pubkey: pubKey,
+    tags: busyListToTags(list),
+    content: "",
+    created_at: Math.floor(Date.now() / 1000),
+  };
+  const signer = await signerManager.getSigner();
+  const signedEvent = await signer.signEvent(baseEvent);
+  signedEvent.id = getEventHash(baseEvent);
+  await publishToRelays(signedEvent);
+  nostrRuntime.addEvent(signedEvent);
+  return signedEvent;
+}
+
+/**
+ * Fetches a user's public busy lists for the given month partition keys.
+ * Returns one IBusyList per month found (skipped silently if absent).
+ */
+export async function fetchBusyListsForUser(
+  pubkey: string,
+  monthKeys: string[],
+): Promise<IBusyList[]> {
+  if (monthKeys.length === 0) return [];
+  const filter: Filter = {
+    kinds: [EventKinds.PublicBusyList],
+    authors: [pubkey],
+    "#d": monthKeys.map(busyListDTag),
+  };
+  const events = await nostrRuntime.querySync(getRelays(), filter);
+  const lists: IBusyList[] = [];
+  for (const event of events) {
+    const list = nostrEventToBusyList(event);
+    if (list) lists.push(list);
+  }
+  return lists;
+}

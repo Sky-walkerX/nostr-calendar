@@ -415,6 +415,10 @@ export function doTimeSlotsOverlap(
 /**
  * Get all concrete bookable slots for a scheduling page over a date range,
  * split by the given duration.
+ *
+ * `busyRanges` is an optional list of `[startMs, endMs]` pairs (typically
+ * sourced from kind-31926 public busy lists for the host); any candidate
+ * slot that overlaps any range is filtered out.
  */
 export function getBookableSlots(
   page: ISchedulingPage,
@@ -422,6 +426,7 @@ export function getBookableSlots(
   to: Date,
   durationMinutes: number,
   now: Date = new Date(),
+  busyRanges: { start: number; end: number }[] = [],
 ): ITimeSlot[] {
   const windows = expandAvailabilitySlots(page, from, to, now);
   const bufferMinutes = page.buffer / 60;
@@ -441,7 +446,16 @@ export function getBookableSlots(
   const deduped = new Map<string, ITimeSlot>();
   for (const slot of allSlots) {
     if (isSlotInPast(slot, now)) continue;
-    const key = `${slot.start.getTime()}-${slot.end.getTime()}`;
+
+    // Drop any slot overlapping a public busy range from the host.
+    const slotStart = slot.start.getTime();
+    const slotEnd = slot.end.getTime();
+    const overlapsBusy = busyRanges.some(
+      (b) => slotStart < b.end && slotEnd > b.start,
+    );
+    if (overlapsBusy) continue;
+
+    const key = `${slotStart}-${slotEnd}`;
     if (!deduped.has(key)) {
       deduped.set(key, slot);
     }

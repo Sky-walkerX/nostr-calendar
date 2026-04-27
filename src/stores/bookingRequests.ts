@@ -33,6 +33,7 @@ import { TEMP_CALENDAR_ID } from "./eventDetails";
 import type { SubscriptionHandle } from "../common/nostrRuntime";
 import { useSchedulingPages } from "./schedulingPages";
 import { useCalendarLists } from "./calendarLists";
+import { useBusyList } from "./busyList";
 import { useTimeBasedEvents } from "./events";
 import { parseEventRef } from "../utils/calendarListTypes";
 import { Event } from "nostr-tools";
@@ -393,6 +394,13 @@ export const useBookingRequests = create<BookingRequestsState>((set, get) => ({
       user: authorPubkey,
       calendarId,
     });
+
+    // Always publish a public busy entry for an approved booking so future
+    // bookers see the slot as unavailable. Best-effort — don't block the
+    // approval flow on relay roundtrips.
+    void useBusyList
+      .getState()
+      .addBusyRange({ start: event.begin, end: event.end });
 
     // Update request status immediately so the UI reflects the approval
     // without waiting for the booking response relay round-trip.

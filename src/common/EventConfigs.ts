@@ -30,4 +30,14 @@ export enum EventKinds {
   BookingRequestRumor = 57,
   BookingResponseGiftWrap = 1058,
   BookingResponseRumor = 58,
+
+  // Public Busy List (free/busy "I'm unavailable here" entries; one event per
+  // user per calendar month, replacement key = ["d", "busy-MM-YYYY"]).
+  PublicBusyList = 31926,
+
+  // Creator Self-Key Index (self-encrypted viewKey backup so the creator can
+  // decrypt their own private events on a fresh device, decoupled from the
+  // calendar list (kind 32123)). One event per private calendar event, keyed
+  // by ["d", <event-d-tag>].
+  PrivateCalendarEventKey = 32680,
 }

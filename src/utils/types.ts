@@ -206,3 +206,30 @@ export interface ITimeSlot {
   /** End time as Date */
   end: Date;
 }
+
+/** A single block range in a public busy list (kind 31926). */
+export interface IBusyRange {
+  /** Range start (ms since epoch). */
+  start: number;
+  /** Range end (ms since epoch). */
+  end: number;
+}
+
+/**
+ * A user's public busy list for one calendar month.
+ *
+ * One Nostr event per `(user, monthKey)`. Each event is parameterized-replaceable
+ * with `["d", "busy-MM-YYYY"]` so republishing replaces only that month.
+ */
+export interface IBusyList {
+  /** Owner public key (event author). */
+  user: string;
+  /** Month partition key, format `MM-YYYY` (e.g. `04-2026`). */
+  monthKey: string;
+  /** Blocked ranges (deduped, sorted). */
+  ranges: IBusyRange[];
+  /** Underlying Nostr event id, or "" if not yet published. */
+  eventId: string;
+  /** Nostr `created_at` of the latest known version. */
+  createdAt: number;
+}

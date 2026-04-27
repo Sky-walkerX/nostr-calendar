@@ -17,6 +17,8 @@ import {
   Divider,
   useMediaQuery,
   useTheme,
+  Checkbox,
+  FormControlLabel,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { ICalendarEvent, RepeatingFrequency } from "../utils/types";
@@ -53,6 +55,11 @@ import { useCalendarLists } from "../stores/calendarLists";
 import { useTimeBasedEvents } from "../stores/events";
 import { parseEventRef } from "../utils/calendarListTypes";
 import { CalendarListSelect } from "./CalendarListSelect";
+import {
+  useBusyList,
+  getBusyListDefaultOptIn,
+  setBusyListDefaultOptIn,
+} from "../stores/busyList";
 
 interface CalendarEventEditProps {
   open: boolean;
@@ -280,6 +287,11 @@ export function CalendarEventEdit({
   const [isPrivate, setIsPrivate] = useState(
     initialEvent?.isPrivateEvent ?? true,
   );
+  // Whether to publish a public busy entry (kind 31926) for this event.
+  // Only applies when creating a new event; edits don't change busy entries.
+  const [publishBusy, setPublishBusy] = useState<boolean>(() =>
+    getBusyListDefaultOptIn(),
+  );
   const { calendars, addEventToCalendar } = useCalendarLists();
   const [selectedCalendarId, setSelectedCalendarId] = useState<string>(
     initialEvent?.calendarId || calendars[0]?.id || "",
@@ -435,6 +447,18 @@ export function CalendarEventEdit({
           isPrivateEvent: false,
         });
       }
+
+      // Publish a public busy entry for the new event when the user opted in.
+      // Skipped on edits — busy entries are tied to creation/booking/deletion only.
+      if (mode === "create" && publishBusy) {
+        // Best-effort, don't block save UX on relay roundtrip.
+        void useBusyList
+          .getState()
+          .addBusyRange({ start: eventToSave.begin, end: eventToSave.end });
+      }
+
+      // Persist preference so future events default to the user's last choice.
+      setBusyListDefaultOptIn(publishBusy);
 
       if (onSave) {
         onSave(eventToSave);
@@ -1109,6 +1133,31 @@ export function CalendarEventEdit({
             : intl.formatMessage({ id: "event.public" })}
         </Button>
       </Box>
+      {mode === "create" && (
+        <Box style={{ paddingLeft: 12, paddingRight: 12 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={publishBusy}
+                onChange={(e) => setPublishBusy(e.target.checked)}
+                size="small"
+              />
+            }
+            label={
+              <Typography variant="body2">
+                {intl.formatMessage({ id: "busyList.publishToggle" })}
+              </Typography>
+            }
+          />
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            style={{ display: "block", marginLeft: 32 }}
+          >
+            {intl.formatMessage({ id: "busyList.helperText" })}
+          </Typography>
+        </Box>
+      )}
     </Box>
   );
 

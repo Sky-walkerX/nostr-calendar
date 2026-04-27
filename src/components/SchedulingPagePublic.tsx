@@ -38,6 +38,9 @@ import { nostrRuntime } from "../common/nostrRuntime";
 import { EventKinds } from "../common/EventConfigs";
 import { nostrEventToSchedulingPage } from "../utils/parser";
 import { getBookableSlots } from "../utils/availabilityHelper";
+import { useBusyList, collectBusyRanges } from "../stores/busyList";
+import { busyListMonthKeysForRange } from "../utils/dateHelper";
+import type { IBusyList } from "../utils/types";
 import { useGetParticipant } from "../stores/participants";
 import { useUser } from "../stores/user";
 import { useBookingRequests } from "../stores/bookingRequests";
@@ -196,18 +199,48 @@ export const SchedulingPagePublic = () => {
   const weekStart = useMemo(() => selectedDate.startOf("week"), [selectedDate]);
   const weekEnd = useMemo(() => weekStart.add(7, "day"), [weekStart]);
 
+  // Public busy lists (kind 31926) for the host, scoped to the visible week.
+  // Slots overlapping any of these ranges are filtered out by getBookableSlots.
+  const fetchOtherBusyLists = useBusyList((s) => s.fetchBusyListsForUser);
+  const [hostBusyLists, setHostBusyLists] = useState<IBusyList[]>([]);
+  useEffect(() => {
+    if (!page) return;
+    let cancelled = false;
+    const monthKeys = busyListMonthKeysForRange(
+      weekStart.valueOf(),
+      weekEnd.valueOf(),
+    );
+    fetchOtherBusyLists(page.user, monthKeys)
+      .then((lists) => {
+        if (!cancelled) setHostBusyLists(lists);
+      })
+      .catch((err) => {
+        console.warn("Failed to fetch host busy lists:", err);
+        if (!cancelled) setHostBusyLists([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [page, weekStart, weekEnd, fetchOtherBusyLists]);
+
   const slots = useMemo(() => {
     if (!page) return [];
     const durationMin =
       page.durationMode === "fixed" ? (selectedDuration ?? 30) : 30;
+    const busyRanges = collectBusyRanges(
+      hostBusyLists,
+      weekStart.valueOf(),
+      weekEnd.valueOf(),
+    );
     return getBookableSlots(
       page,
       weekStart.toDate(),
       weekEnd.toDate(),
       durationMin,
       new Date(),
+      busyRanges,
     );
-  }, [page, weekStart, weekEnd, selectedDuration]);
+  }, [page, weekStart, weekEnd, selectedDuration, hostBusyLists]);
 
   // Group slots by date
   const slotsByDate = useMemo(() => {

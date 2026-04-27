@@ -4,6 +4,8 @@ import type {
   ISchedulingPage,
   IAvailabilityWindow,
   DurationMode,
+  IBusyList,
+  IBusyRange,
 } from "./types";
 import { getRelays } from "../common/nostr";
 
@@ -250,3 +252,84 @@ export const schedulingPageToTags = (page: ISchedulingPage): string[][] => {
 
   return tags;
 };
+
+// --- Public Busy List (kind 31926) ---
+
+const BUSY_LIST_D_PREFIX = "busy-";
+
+/** d-tag for a busy list of a given month, e.g. `busy-04-2026`. */
+export function busyListDTag(monthKey: string): string {
+  return `${BUSY_LIST_D_PREFIX}${monthKey}`;
+}
+
+/** Inverse of `busyListDTag`; returns null if the tag doesn't match. */
+export function busyListMonthKeyFromDTag(dTag: string): string | null {
+  if (!dTag.startsWith(BUSY_LIST_D_PREFIX)) return null;
+  const rest = dTag.slice(BUSY_LIST_D_PREFIX.length);
+  return /^\d{2}-\d{4}$/.test(rest) ? rest : null;
+}
+
+/**
+ * Parse a Nostr event (kind 31926) into an IBusyList.
+ *
+ * Wire format:
+ *   tags: [
+ *     ["d", "busy-MM-YYYY"],   // replacement key (NIP-01 §16)
+ *     ["t", "MM-YYYY"],         // queryable hashtag (NIP-12)
+ *     ["t", "busy"],            // secondary hashtag
+ *     ["block", "<startSec>", "<endSec>"], // repeatable
+ *     ...
+ *   ]
+ *   content: ""  (intentionally empty — no titles/descs leaked)
+ */
+export function nostrEventToBusyList(event: Event): IBusyList | null {
+  const dTag = event.tags.find((t) => t[0] === "d")?.[1] ?? "";
+  const monthKey = busyListMonthKeyFromDTag(dTag);
+  if (!monthKey) return null;
+
+  const ranges: IBusyRange[] = [];
+  for (const tag of event.tags) {
+    if (tag[0] !== "block") continue;
+    const start = Number(tag[1]) * 1000;
+    const end = Number(tag[2]) * 1000;
+    if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+    if (end <= start) continue;
+    ranges.push({ start, end });
+  }
+  // Sort + dedupe by exact start/end.
+  ranges.sort((a, b) => a.start - b.start || a.end - b.end);
+  const deduped: IBusyRange[] = [];
+  for (const r of ranges) {
+    const last = deduped[deduped.length - 1];
+    if (last && last.start === r.start && last.end === r.end) continue;
+    deduped.push(r);
+  }
+
+  return {
+    user: event.pubkey,
+    monthKey,
+    ranges: deduped,
+    eventId: event.id,
+    createdAt: event.created_at,
+  };
+}
+
+/**
+ * Serialize an IBusyList into Nostr tags. Caller is responsible for setting
+ * `kind`, `pubkey`, `created_at`, `content: ""`.
+ */
+export function busyListToTags(list: IBusyList): string[][] {
+  const tags: string[][] = [
+    ["d", busyListDTag(list.monthKey)],
+    ["t", list.monthKey],
+    ["t", "busy"],
+  ];
+  for (const r of list.ranges) {
+    tags.push([
+      "block",
+      String(Math.floor(r.start / 1000)),
+      String(Math.floor(r.end / 1000)),
+    ]);
+  }
+  return tags;
+}

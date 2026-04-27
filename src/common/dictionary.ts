@@ -150,6 +150,11 @@ const dictionary: NestedObject = {
       selectCalendar: "Select Calendar",
       addNewCalendar: "Add new calendar",
     },
+    busyList: {
+      publishToggle: "Show this time as busy on my public availability",
+      helperText:
+        "Publishes a public busy entry so others booking with you can see this slot is taken. The entry contains only start/end times — no event details.",
+    },
     invitation: {
       invitations: "Invitations",
       noPendingInvitations: "No pending invitations",
@@ -438,6 +443,12 @@ const dictionary: NestedObject = {
       addToCalendar: "Zum Kalender hinzufügen",
       selectCalendar: "Kalender auswählen",
       addNewCalendar: "Neuen Kalender hinzufügen",
+    },
+    busyList: {
+      publishToggle:
+        "Diese Zeit in meiner öffentlichen Verfügbarkeit als belegt anzeigen",
+      helperText:
+        "Veröffentlicht einen öffentlichen Belegt-Eintrag, sodass andere, die mit Ihnen einen Termin buchen, sehen können, dass dieser Zeitraum vergeben ist. Der Eintrag enthält ausschließlich Start- und Endzeit – keine Termindetails.",
     },
     invitation: {
       invitations: "Einladungen",

@@ -27,6 +27,8 @@ import { AppLoadingBar } from "./components/AppLoadingBar";
 import { useSchedulingPages } from "./stores/schedulingPages";
 import { useBookingRequests } from "./stores/bookingRequests";
 import { useInvitations } from "./stores/invitations";
+import { useBusyList } from "./stores/busyList";
+import { busyListMonthKeysForRange } from "./utils/dateHelper";
 
 const browserLocale =
   (navigator.languages && navigator.languages[0]) ||
@@ -79,6 +81,14 @@ function Application() {
     if (user && isInitialized && calendarsLoaded) {
       events.fetchPrivateEvents();
       fetchInvitations();
+      // Pre-fetch the user's own public busy lists for the current and
+      // adjacent months so add/remove operations merge with the latest
+      // remote state.
+      const now = Date.now();
+      const month = 30 * 24 * 60 * 60 * 1000;
+      void useBusyList
+        .getState()
+        .loadOwnLists(busyListMonthKeysForRange(now - month, now + 2 * month));
     }
   }, [user, calendarsLoaded, events, fetchInvitations, isInitialized]);
 
