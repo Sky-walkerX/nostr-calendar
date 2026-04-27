@@ -288,7 +288,8 @@ export function CalendarEventEdit({
     initialEvent?.isPrivateEvent ?? true,
   );
   // Whether to publish a public busy entry (kind 31926) for this event.
-  // Only applies when creating a new event; edits don't change busy entries.
+  // Applies to creates and to edits where the time range changes; on edits
+  // we also remove the previous range so the busy list stays in sync.
   const [publishBusy, setPublishBusy] = useState<boolean>(() =>
     getBusyListDefaultOptIn(),
   );
@@ -448,10 +449,27 @@ export function CalendarEventEdit({
         });
       }
 
-      // Publish a public busy entry for the new event when the user opted in.
-      // Skipped on edits — busy entries are tied to creation/booking/deletion only.
-      if (mode === "create" && publishBusy) {
-        // Best-effort, don't block save UX on relay roundtrip.
+      // Public busy list maintenance:
+      //  - create + opted-in        -> publish a busy range for the new event.
+      //  - edit + range changed     -> always remove the previous range
+      //                                 (idempotent) and, if opted-in, publish
+      //                                 the new one.
+      //  - edit + range unchanged   -> do nothing.
+      // Best-effort, don't block save UX on relay roundtrip.
+      const rangeChanged =
+        mode === "edit" &&
+        !!initialEvent &&
+        (initialEvent.begin !== eventToSave.begin ||
+          initialEvent.end !== eventToSave.end);
+      if (rangeChanged && initialEvent) {
+        void useBusyList
+          .getState()
+          .removeBusyRange({
+            start: initialEvent.begin,
+            end: initialEvent.end,
+          });
+      }
+      if (publishBusy && (mode === "create" || rangeChanged)) {
         void useBusyList
           .getState()
           .addBusyRange({ start: eventToSave.begin, end: eventToSave.end });
@@ -1133,31 +1151,29 @@ export function CalendarEventEdit({
             : intl.formatMessage({ id: "event.public" })}
         </Button>
       </Box>
-      {mode === "create" && (
-        <Box style={{ paddingLeft: 12, paddingRight: 12 }}>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={publishBusy}
-                onChange={(e) => setPublishBusy(e.target.checked)}
-                size="small"
-              />
-            }
-            label={
-              <Typography variant="body2">
-                {intl.formatMessage({ id: "busyList.publishToggle" })}
-              </Typography>
-            }
-          />
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            style={{ display: "block", marginLeft: 32 }}
-          >
-            {intl.formatMessage({ id: "busyList.helperText" })}
-          </Typography>
-        </Box>
-      )}
+      <Box style={{ paddingLeft: 12, paddingRight: 12 }}>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={publishBusy}
+              onChange={(e) => setPublishBusy(e.target.checked)}
+              size="small"
+            />
+          }
+          label={
+            <Typography variant="body2">
+              {intl.formatMessage({ id: "busyList.publishToggle" })}
+            </Typography>
+          }
+        />
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          style={{ display: "block", marginLeft: 32 }}
+        >
+          {intl.formatMessage({ id: "busyList.helperText" })}
+        </Typography>
+      </Box>
     </Box>
   );
 

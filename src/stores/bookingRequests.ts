@@ -498,12 +498,14 @@ export const useBookingRequests = create<BookingRequestsState>((set, get) => ({
       const incomingRequests = state.incomingRequests.map((request) => {
         if (request.status !== "pending") return request;
 
-        // Find the scheduling page to get its expiry setting
+        // Find the scheduling page to get its expiry setting.
+        // `expiry === 0` (or missing) means "never expire" — we no longer
+        // fall back to a hard-coded 48h window.
         const pageRef = request.schedulingPageRef;
         // Extract the d-tag from the a-tag reference: "31927:pubkey:dtag"
         const pageDTag = pageRef.split(":")[2];
         const page = pages.find((p) => p.id === pageDTag);
-        const expiry = page?.expiry ?? 172800; // Default 48h
+        const expiry = page?.expiry ?? 0;
 
         if (expiry > 0 && now - request.receivedAt > expiry * 1000) {
           changed = true;

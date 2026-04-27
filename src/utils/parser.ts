@@ -114,7 +114,7 @@ export const nostrEventToSchedulingPage = (event: Event): ISchedulingPage => {
     minNotice: 3600,
     maxAdvance: 2592000,
     buffer: 900,
-    expiry: 172800,
+    expiry: 0,
     location: "",
     image: undefined,
     relayHints: [],

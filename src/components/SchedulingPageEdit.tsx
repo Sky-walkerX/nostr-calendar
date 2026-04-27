@@ -62,14 +62,6 @@ const BUFFER_OPTIONS = [
   { label: "30 min", value: 1800 },
 ];
 
-const EXPIRY_OPTIONS = [
-  { label: "24 hours", value: 86400 },
-  { label: "48 hours", value: 172800 },
-  { label: "72 hours", value: 259200 },
-  { label: "7 days", value: 604800 },
-  { label: "Never", value: 0 },
-];
-
 interface RecurringDayConfig {
   enabled: boolean;
   startTime: string;
@@ -121,7 +113,7 @@ const DEFAULT_FORM_DATA: SchedulingFormData = {
   blockedDates: [],
   maxAdvance: 2592000,
   buffer: 900,
-  expiry: 172800,
+  expiry: 0,
 };
 
 function timeStringToDayjs(time: string): Dayjs {
@@ -892,24 +884,6 @@ export const SchedulingPageEdit = () => {
                 }
               >
                 {BUFFER_OPTIONS.map((opt) => (
-                  <MenuItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth size="small">
-              <InputLabel>
-                {intl.formatMessage({ id: "scheduling.requestExpiry" })}
-              </InputLabel>
-              <Select
-                value={formData.expiry}
-                label={intl.formatMessage({ id: "scheduling.requestExpiry" })}
-                onChange={(e) =>
-                  updateField("expiry", Number(e.target.value))
-                }
-              >
-                {EXPIRY_OPTIONS.map((opt) => (
                   <MenuItem key={opt.value} value={opt.value}>
                     {opt.label}
                   </MenuItem>

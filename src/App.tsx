@@ -32,6 +32,7 @@ import { useBookingRequests } from "./stores/bookingRequests";
 import { useInvitations } from "./stores/invitations";
 import { useBusyList } from "./stores/busyList";
 import { busyListMonthKeysForRange } from "./utils/dateHelper";
+import { useDateWithRouting } from "./hooks/useDateWithRouting";
 
 const browserLocale =
   (navigator.languages && navigator.languages[0]) ||
@@ -88,16 +89,27 @@ function Application() {
         events.fetchPrivateEvents(),
       );
       fetchInvitations();
-      // Pre-fetch the user's own public busy lists for the current and
-      // adjacent months so add/remove operations merge with the latest
-      // remote state.
-      const now = Date.now();
-      const month = 30 * 24 * 60 * 60 * 1000;
-      void useBusyList
-        .getState()
-        .loadOwnLists(busyListMonthKeysForRange(now - month, now + 2 * month));
     }
   }, [user, calendarsLoaded, events, fetchInvitations, isInitialized]);
+
+  // Refetch the user's own public busy lists whenever the visible month
+  // changes, so add/remove operations merge with the latest remote state
+  // and viewers navigating across months see up-to-date availability.
+  const { date: visibleDate } = useDateWithRouting();
+  const visibleMonthKey = `${visibleDate.year()}-${visibleDate.month()}`;
+  useEffect(() => {
+    if (!user || !isInitialized || !calendarsLoaded) return;
+    const center = visibleDate.startOf("month").valueOf();
+    const month = 30 * 24 * 60 * 60 * 1000;
+    void useBusyList
+      .getState()
+      .loadOwnLists(
+        busyListMonthKeysForRange(center - month, center + 2 * month),
+      );
+    // visibleMonthKey is the stable derived dep; visibleDate identity
+    // changes on every render so we key off the month string instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, isInitialized, calendarsLoaded, visibleMonthKey]);
 
   // Cleanup invitation listener on unmount
   useEffect(() => {

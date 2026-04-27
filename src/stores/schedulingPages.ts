@@ -190,50 +190,43 @@ export const useSchedulingPages = create<SchedulingPagesState>((set, get) => ({
     subscriptionHandle = fetchUserSchedulingPages(
       userPubkey,
       async (event) => {
-        // Outer encrypted form: tags are reduced to [["d", id]] and the
-        // page body lives in `content` as NIP-44 ciphertext. Detect via
-        // missing `title` tag at the outer level (the only tag every
-        // legacy plaintext page must carry alongside `d`).
-        const hasOuterTitle = event.tags.some((t) => t[0] === "title");
-        let parseSource: Event = event;
-        let viewKeyHex: string | undefined;
-
-        if (!hasOuterTitle && event.content) {
-          await ensureOwnPrivateEventKeyIndexLoaded();
-          const dTag = event.tags.find((t) => t[0] === "d")?.[1];
-          if (!dTag) return;
-          const entry = getOwnPrivateEventKeyIndex().get(dTag);
-          if (!entry || entry.eventKind !== EventKinds.SchedulingPage) {
-            // Either someone else's encrypted page (we can't decrypt) or
-            // a tombstoned record (entry deleted). Skip silently.
-            return;
+        // All scheduling pages we publish are NIP-44 encrypted: the outer
+        // event carries only `["d", id]` plus ciphertext in `content`.
+        // Decrypt unconditionally via the kind-32680 self-key index.
+        await ensureOwnPrivateEventKeyIndexLoaded();
+        const dTag = event.tags.find((t) => t[0] === "d")?.[1];
+        if (!dTag) return;
+        const entry = getOwnPrivateEventKeyIndex().get(dTag);
+        if (!entry || entry.eventKind !== EventKinds.SchedulingPage) {
+          // Either someone else's encrypted page (we can't decrypt) or
+          // a tombstoned record (entry deleted). Skip silently.
+          return;
+        }
+        let parseSource: Event;
+        let viewKeyHex: string;
+        try {
+          const decoded = decode(entry.viewKey);
+          if (decoded.type !== "nsec") {
+            throw new Error(`unexpected viewKey encoding: ${decoded.type}`);
           }
-          try {
-            const decoded = decode(entry.viewKey);
-            if (decoded.type !== "nsec") {
-              throw new Error(`unexpected viewKey encoding: ${decoded.type}`);
-            }
-            const sk = decoded.data as Uint8Array;
-            viewKeyHex = bytesToHex(sk);
-            const pk = getPublicKey(sk);
-            const conversationKey = nip44.getConversationKey(sk, pk);
-            const decryptedTags = JSON.parse(
-              nip44.decrypt(event.content, conversationKey),
-            ) as string[][];
-            parseSource = { ...event, tags: decryptedTags };
-          } catch (err) {
-            console.warn(
-              `Failed to decrypt own scheduling page d=${dTag}:`,
-              err instanceof Error ? err.message : err,
-            );
-            return;
-          }
+          const sk = decoded.data as Uint8Array;
+          viewKeyHex = bytesToHex(sk);
+          const pk = getPublicKey(sk);
+          const conversationKey = nip44.getConversationKey(sk, pk);
+          const decryptedTags = JSON.parse(
+            nip44.decrypt(event.content, conversationKey),
+          ) as string[][];
+          parseSource = { ...event, tags: decryptedTags };
+        } catch (err) {
+          console.warn(
+            `Failed to decrypt own scheduling page d=${dTag}:`,
+            err instanceof Error ? err.message : err,
+          );
+          return;
         }
 
         const page = nostrEventToSchedulingPage(parseSource);
-        if (viewKeyHex) {
-          page.viewKey = viewKeyHex;
-        }
+        page.viewKey = viewKeyHex;
 
         set((state) => {
           const existing = state.pages.find((p) => p.id === page.id);
