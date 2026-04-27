@@ -6,7 +6,9 @@ This document defines the appointment scheduling protocol implemented in this re
 
 | Kind | Name | Type | Description |
 |---|---|---|---|
-| 31927 | Scheduling Page | Parameterized replaceable | Scheduling page definition and availability settings. |
+| 31927 | Scheduling Page | Parameterized replaceable | Scheduling page definition and availability settings. Always private in this client. |
+| 31926 | Public Busy List | Parameterized replaceable | Per-month list of opaque busy ranges published by a user. |
+| 32680 | Creator Self-Key Index | Parameterized replaceable | Self-encrypted backup of view keys for the author's private events. |
 | 1057 | Booking Request Gift Wrap | Regular | NIP-59 gift wrap addressed to scheduling-page owner. |
 | 57 | Booking Request Rumor | Unsigned rumor | Inner request payload (inside kind `1057`). |
 | 1058 | Booking Response Gift Wrap | Regular | NIP-59 gift wrap addressed to booker. |
@@ -14,15 +16,23 @@ This document defines the appointment scheduling protocol implemented in this re
 
 ## Scheduling Page (Kind 31927)
 
-### Public scheduling page encoding
+All scheduling pages are published privately in this client. There is no plaintext encoding on the wire — only the outer `d` tag is visible.
 
-- Event kind: `31927`
-- Event content: page description string
-- Tags are produced from `schedulingPageToTags()` and parsed by `nostrEventToSchedulingPage()`
+### Encoding
+
+- Outer event kind: `31927`
+- Outer tags: `[["d", "<pageId>"]]` only.
+- Outer content: NIP-44 ciphertext produced as a self-conversation between an ephemeral view keypair and itself; the plaintext is the JSON-serialized full tag list (title, duration mode, availability windows, etc.) emitted by `schedulingPageToTags()`.
+- Share URL appends the raw hex view secret key as a query param:
+  - `/schedule/<naddr>?viewKey=<hex>`
+- Without `viewKey`, the public viewer cannot decrypt the page and renders an unsupported notice.
+
+### Plaintext payload tag reference
+
+The NIP-44 plaintext is a JSON array of tags with the following shape:
 
 | Tag | Shape | Meaning |
 |---|---|---|
-| `d` | `["d", "<pageId>"]` | Page identifier (d-tag). |
 | `title` | `["title", "<text>"]` | Page title. |
 | `duration_mode` | `["duration_mode", "fixed" \| "free"]` | Duration selection mode. |
 | `slot_duration` | `["slot_duration", "<minutes>"]` (repeatable) | Allowed slot durations for fixed mode. |
@@ -39,16 +49,6 @@ This document defines the appointment scheduling protocol implemented in this re
 | `event_title` | `["event_title", "<text>"]` | Optional default title for resulting appointments. |
 | `relay` | `["relay", "<relayUrl>"]` (repeatable) | Relay hints attached at publish time. |
 
-### Private scheduling page encoding
-
-When `isPrivate` is enabled:
-
-- Outer event kind is still `31927`.
-- Outer tags are only: `["d", "<pageId>"]`.
-- Full scheduling tags are JSON-serialized and NIP-44 encrypted into `content` using a generated view keypair in a self-conversation pattern.
-- Share URL format appends the raw hex view key as query param:
-  - `/schedule/<naddr>?viewKey=<hex>`
-
 ## Discovery and Sharing
 
 - NAddr for a scheduling page is encoded with:
@@ -56,10 +56,80 @@ When `isPrivate` is enabled:
   - `pubkey = page.user`
   - `identifier = page.id` (d-tag)
   - `relays = getRelays()`
-- Public page route:
-  - `/schedule/<naddr>`
-- Private page route:
+- Page route (always requires viewKey):
   - `/schedule/<naddr>?viewKey=<hex>`
+
+## Public Busy List (Kind 31926)
+
+A parameterized-replaceable record that exposes a user's already-committed time ranges within a single calendar month, without revealing event titles, participants, or any other detail. Used by scheduling-page viewers to filter slots that the host already has commitments for.
+
+### Encoding
+
+- Event kind: `31926`
+- One event per (user, month). The month bucket is `MM-YYYY` in UTC.
+- Tags:
+
+| Tag | Shape | Meaning |
+|---|---|---|
+| `d` | `["d", "busy-MM-YYYY"]` | Identifier — UTC month bucket. |
+| `t` | `["t", "MM-YYYY"]`, `["t", "busy"]` | Hashtags for relay indexing/discovery. |
+| `block` | `["block", "<startSec>", "<endSec>"]` (repeatable) | Opaque busy range in unix seconds. |
+
+- Content is empty.
+- Ranges crossing month boundaries are emitted into every month they overlap.
+
+### Lifecycle triggers (this client)
+
+The client offers an opt-out checkbox on event creation and on invitation accept; the default is persisted under `cal:busy_list_default_optout`. Booking approvals always emit a busy entry.
+
+| Action | Effect |
+|---|---|
+| Author creates a new event with toggle on | `addBusyRange({start,end})` |
+| Author accepts an invitation with toggle on | `addBusyRange({start,end})` |
+| Host approves a booking request | `addBusyRange({start,end})` (always) |
+| Author deletes the event for everyone | `removeBusyRange({start,end})` |
+| Author removes the event from their calendar | `removeBusyRange({start,end})` |
+
+`addBusyRange` and `removeBusyRange` always re-fetch the current month's record from relays before re-publishing to avoid clobbering ranges from other devices.
+
+### Consumption
+
+When rendering a scheduling page (`SchedulingPagePublic`), the client fetches the host's 31926 records covering the visible week's months and passes the union of `block` ranges to `getBookableSlots`, which discards any candidate slot whose `[start,end]` overlaps a busy range.
+
+## Creator Self-Key Index (Kind 32680)
+
+A self-encrypted backup record that lets the author of a private calendar event recover its `viewKey` independently of the calendar list (kind `32123`). This makes the private-event flow robust to fresh devices, calendar-list desync, and removed calendar-list entries.
+
+### Encoding
+
+- Event kind: `32680`
+- Author: the same pubkey that authored the underlying private calendar event.
+- Tags: `[["d", "<eventDTag>"]]` — the d-tag matches the d-tag of the private calendar event being indexed.
+- Content: NIP-44 ciphertext produced as a self-conversation under the author's own pubkey. Plaintext is JSON:
+
+```json
+{
+  "v": 1,
+  "viewKey": "<nsec1...>",
+  "eventKind": 32678,
+  "dTag": "<eventDTag>",
+  "createdAt": <unixSeconds>
+}
+```
+
+- The inner `dTag` MUST equal the outer `d` tag value; readers reject mismatches.
+- A tombstone is encoded as the same outer event with empty content (no decryptable payload).
+
+### Lifecycle
+
+| Action | Effect |
+|---|---|
+| Author publishes a private calendar event | Publish a kind-32680 record alongside the event (best-effort, non-fatal on failure). |
+| Author deletes the private event for everyone | Publish an empty-content kind-32680 record as a tombstone. |
+
+### Consumption
+
+At login the client calls `fetchOwnPrivateEventKeys()` (filter `{kinds:[32680], authors:[self]}`), self-decrypts each record, and caches a `Map<dTag, {viewKey, eventKind}>` in the events store. When `fetchPrivateEvents` walks calendar-list refs and finds an entry whose `viewKey` field is empty, it falls back to this map. If neither source provides a key, the event is skipped.
 
 ## Booking Request Flow (Booker -> Creator)
 
@@ -218,12 +288,22 @@ Expiry behavior:
 | `eventRef` | optional approved event reference coordinate |
 | `viewKey` | optional approved event view key |
 
+## Migration Notes
+
+- **Public scheduling pages (legacy):** Earlier versions of this client published `31927` events with plaintext tags. Such events remain parseable on the wire by other clients but are no longer rendered by this client; opening one without a `viewKey` shows an unsupported notice. New pages published by this client are always private.
+- **Private events without a 32680 record (legacy):** Private calendar events authored before kind `32680` was introduced will not have a self-key index record. They continue to work via the `viewKey` carried in the author's calendar list (kind `32123`) ref. Re-publishing the event from this client will emit the missing 32680 record going forward.
+- **Public busy list opt-in:** The toggle is shown on event creation and invitation accept; the user's choice is persisted locally under `cal:busy_list_default_optout` and applied to subsequent flows. Booking approvals always emit a busy entry regardless of the toggle.
+
 ## Implementation References
 
 - [src/common/EventConfigs.ts](src/common/EventConfigs.ts)
 - [src/utils/parser.ts](src/utils/parser.ts)
 - [src/utils/types.ts](src/utils/types.ts)
+- [src/utils/dateHelper.ts](src/utils/dateHelper.ts)
+- [src/utils/availabilityHelper.ts](src/utils/availabilityHelper.ts)
 - [src/stores/schedulingPages.ts](src/stores/schedulingPages.ts)
+- [src/stores/busyList.ts](src/stores/busyList.ts)
+- [src/stores/events.ts](src/stores/events.ts)
 - [src/components/SchedulingPagePublic.tsx](src/components/SchedulingPagePublic.tsx)
 - [src/stores/bookingRequests.ts](src/stores/bookingRequests.ts)
 - [src/common/nip59.ts](src/common/nip59.ts)
