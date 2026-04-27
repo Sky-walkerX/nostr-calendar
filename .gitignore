@@ -142,4 +142,4 @@ src/test_scripts/*
 # Android signing
 *.keystore
 *.jks
-keystore.properties
+keystore.properties.vscode/
