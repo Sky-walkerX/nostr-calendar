@@ -42,26 +42,24 @@ import {
 
 async function publishSchedulingPage(page: ISchedulingPage): Promise<{
   event: Event;
-  viewKey?: string;
+  viewKey: string;
 }> {
   const pubKey = await getUserPublicKey();
   const tags = schedulingPageToTags(page);
 
-  let content = page.description;
-  let publishTags = tags;
-  let viewKeyHex: string | undefined;
-
-  if (page.isPrivate) {
-    const viewSecretKey = generateSecretKey();
-    const viewPublicKey = getPublicKey(viewSecretKey);
-    viewKeyHex = bytesToHex(viewSecretKey);
-    const conversationKey = nip44.getConversationKey(
-      viewSecretKey,
-      viewPublicKey,
-    );
-    content = nip44.encrypt(JSON.stringify(tags), conversationKey);
-    publishTags = [["d", page.id]];
-  }
+  // All scheduling pages are encrypted as of vNEXT. Public scheduling
+  // pages are no longer supported by this client; the page body is always
+  // wrapped in a NIP-44 envelope keyed by an ephemeral viewKey shared
+  // through the page's URL (?viewKey=...).
+  const viewSecretKey = generateSecretKey();
+  const viewPublicKey = getPublicKey(viewSecretKey);
+  const viewKeyHex = bytesToHex(viewSecretKey);
+  const conversationKey = nip44.getConversationKey(
+    viewSecretKey,
+    viewPublicKey,
+  );
+  const content = nip44.encrypt(JSON.stringify(tags), conversationKey);
+  const publishTags = [["d", page.id]];
 
   const baseEvent: UnsignedEvent = {
     kind: EventKinds.SchedulingPage,
@@ -194,7 +192,7 @@ export const useSchedulingPages = create<SchedulingPagesState>((set, get) => ({
 
     const { event: signedEvent, viewKey } = await publishSchedulingPage(page);
     page.eventId = signedEvent.id;
-    if (viewKey) page.viewKey = viewKey;
+    page.viewKey = viewKey;
 
     set((state) => {
       const pages = [...state.pages, page];
@@ -210,7 +208,7 @@ export const useSchedulingPages = create<SchedulingPagesState>((set, get) => ({
     const updated = {
       ...page,
       eventId: signedEvent.id,
-      ...(viewKey ? { viewKey } : {}),
+      viewKey,
       createdAt: Math.floor(Date.now() / 1000),
     };
 
@@ -252,7 +250,8 @@ export const useSchedulingPages = create<SchedulingPagesState>((set, get) => ({
   getPageUrl: (page) => {
     const naddr = get().getNAddr(page);
     const base = `${window.location.origin}/schedule/${naddr}`;
-    return page.viewKey ? `${base}?viewKey=${page.viewKey}` : base;
+    // viewKey is mandatory after vNEXT — always append it.
+    return `${base}?viewKey=${page.viewKey}`;
   },
 
   clearCachedPages: async () => {

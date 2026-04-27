@@ -157,26 +157,30 @@ export const SchedulingPagePublic = () => {
   useEffect(() => {
     if (!naddr) return;
     setFetchState("loading");
+    // All scheduling pages are private as of vNEXT \u2014 the URL must carry
+    // a viewKey for decryption. Pages without one (legacy public pages or
+    // tampered links) are rejected outright.
+    if (!viewKey) {
+      setFetchState("error");
+      return;
+    }
     fetchSchedulingPage(naddr as NAddr)
       .then((event) => {
         let eventToProcess = event;
-        // Decrypt private scheduling page if viewKey is provided
-        if (viewKey) {
-          try {
-            const viewSecretKey = hexToBytes(viewKey);
-            const viewPublicKey = getPublicKey(viewSecretKey);
-            const conversationKey = nip44.getConversationKey(
-              viewSecretKey,
-              viewPublicKey,
-            );
-            const decryptedTags = JSON.parse(
-              nip44.decrypt(event.content, conversationKey),
-            );
-            eventToProcess = { ...event, tags: decryptedTags };
-          } catch {
-            setFetchState("error");
-            return;
-          }
+        try {
+          const viewSecretKey = hexToBytes(viewKey);
+          const viewPublicKey = getPublicKey(viewSecretKey);
+          const conversationKey = nip44.getConversationKey(
+            viewSecretKey,
+            viewPublicKey,
+          );
+          const decryptedTags = JSON.parse(
+            nip44.decrypt(event.content, conversationKey),
+          );
+          eventToProcess = { ...event, tags: decryptedTags };
+        } catch {
+          setFetchState("error");
+          return;
         }
         const parsed = nostrEventToSchedulingPage(eventToProcess);
         setPage(parsed);
@@ -193,7 +197,7 @@ export const SchedulingPagePublic = () => {
         console.error(e);
         setFetchState("error");
       });
-  }, [naddr]);
+  }, [naddr, viewKey]);
 
   // Compute available slots for the displayed week
   const weekStart = useMemo(() => selectedDate.startOf("week"), [selectedDate]);
@@ -392,7 +396,9 @@ export const SchedulingPagePublic = () => {
         <Toolbar />
         <Box sx={{ p: 3, maxWidth: 800, mx: "auto" }}>
           <Alert severity="error">
-            {intl.formatMessage({ id: "scheduling.loadError" })}
+            {!viewKey
+              ? intl.formatMessage({ id: "scheduling.publicPagesUnsupported" })
+              : intl.formatMessage({ id: "scheduling.loadError" })}
           </Alert>
         </Box>
       </>

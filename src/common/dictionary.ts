@@ -285,6 +285,8 @@ const dictionary: NestedObject = {
       pageNotFound: "Scheduling page not found. It may have been deleted.",
       loadError:
         "Could not load scheduling page. It may have been deleted or is temporarily unavailable.",
+      publicPagesUnsupported:
+        "This scheduling page link is missing its access key. Public scheduling pages are no longer supported \u2014 please ask the host for an updated link.",
       customDuration: "Custom (min)",
       customDurationPlaceholder: "e.g. 45",
       openLink: "Open link",
@@ -583,6 +585,8 @@ const dictionary: NestedObject = {
         "Terminseite nicht gefunden. Sie wurde möglicherweise gelöscht.",
       loadError:
         "Terminseite konnte nicht geladen werden. Sie wurde möglicherweise gelöscht oder ist vorübergehend nicht verfügbar.",
+      publicPagesUnsupported:
+        "Diesem Link zur Terminseite fehlt der Zugriffsschlüssel. Öffentliche Terminseiten werden nicht mehr unterstützt – bitte fordern Sie einen aktualisierten Link beim Gastgeber an.",
       customDuration: "Benutzerdefiniert (Min.)",
       customDurationPlaceholder: "z.B. 45",
       openLink: "Link öffnen",

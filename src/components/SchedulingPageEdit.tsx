@@ -109,7 +109,6 @@ type SchedulingFormData = Pick<
 > & {
   eventTitle: string;
   image: string;
-  isPrivate: boolean;
 };
 
 const DEFAULT_FORM_DATA: SchedulingFormData = {
@@ -123,7 +122,6 @@ const DEFAULT_FORM_DATA: SchedulingFormData = {
   maxAdvance: 2592000,
   buffer: 900,
   expiry: 172800,
-  isPrivate: false,
 };
 
 function timeStringToDayjs(time: string): Dayjs {
@@ -220,7 +218,6 @@ export const SchedulingPageEdit = () => {
       maxAdvance: existingPage.maxAdvance,
       buffer: existingPage.buffer,
       expiry: existingPage.expiry,
-      isPrivate: existingPage.isPrivate ?? false,
     });
 
     // Parse availability windows into weekly + one-off
@@ -909,19 +906,6 @@ export const SchedulingPageEdit = () => {
                 ))}
               </Select>
             </FormControl>
-          </Box>
-          <Box sx={{ mt: 2 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formData.isPrivate}
-                  onChange={(e) =>
-                    updateField("isPrivate", e.target.checked)
-                  }
-                />
-              }
-              label={intl.formatMessage({ id: "scheduling.privatePage" })}
-            />
           </Box>
         </Paper>
 
