@@ -45,7 +45,7 @@ const STATUS_COLORS: Record<
   cancelled: "default",
 };
 
-export const BookingsPage = () => {
+export const BookingNotifications = () => {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));

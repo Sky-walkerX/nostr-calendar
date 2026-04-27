@@ -118,7 +118,7 @@ async function sendBookingRequest({
 
 type FetchState = "loading" | "loaded" | "error";
 
-export const SchedulingPagePublic = () => {
+export const BookingPage = () => {
   const { naddr } = useParams<{ naddr: string }>();
   const [searchParams] = useSearchParams();
   const viewKey = searchParams.get("viewKey");

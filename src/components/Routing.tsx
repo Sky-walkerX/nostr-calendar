@@ -7,8 +7,8 @@ import { Index } from "./Index";
 import Calendar from "./Calendar";
 import { InvitationPanel } from "./InvitationPanel";
 import { SchedulingPageEdit } from "./SchedulingPageEdit";
-import { SchedulingPagePublic } from "./SchedulingPagePublic";
-import { BookingsPage } from "./BookingsPage";
+import { BookingPage } from "./BookingPage";
+import { BookingNotifications } from "./BookingNotifications";
 
 export const Routing = () => {
   return (
@@ -30,9 +30,9 @@ export const Routing = () => {
       />
       <Route
         path={ROUTES.SchedulingPagePublic}
-        element={<SchedulingPagePublic />}
+        element={<BookingPage />}
       />
-      <Route path={ROUTES.Bookings} element={<BookingsPage />} />
+      <Route path={ROUTES.Bookings} element={<BookingNotifications />} />
       <Route path={ROUTES.WeekCalendar} element={<Calendar />} />
       <Route path={ROUTES.MonthCalendar} element={<Calendar />} />
       <Route path={ROUTES.DayCalendar} element={<Calendar />} />

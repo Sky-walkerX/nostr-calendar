@@ -146,11 +146,11 @@ function parseBlockedDateEntry(entry: string): BlockedWindow {
   };
 }
 
-function serializeBlockedWindow(window: BlockedWindow): string {
-  if (window.startTime === "00:00" && window.endTime === "23:59") {
-    return window.date;
+function serializeBlockedWindow(bw: BlockedWindow): string {
+  if (bw.startTime === "00:00" && bw.endTime === "23:59") {
+    return bw.date;
   }
-  return `${window.date}|${window.startTime}|${window.endTime}`;
+  return `${bw.date}|${bw.startTime}|${bw.endTime}`;
 }
 
 export const SchedulingPageEdit = () => {
