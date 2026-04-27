@@ -250,11 +250,17 @@ export async function publishPrivateCalendarEvent(
   // viewKey on a fresh device even if the calendar list (32123) was lost
   // or out-of-sync. Best-effort: failure is logged but non-fatal.
   try {
+    const viewKeyNsec = nip19.nsecEncode(viewSecretKey);
     await publishSelfKeyIndex({
       dTag,
       eventKind,
-      viewKeyNsec: nip19.nsecEncode(viewSecretKey),
+      viewKeyNsec,
     });
+    // Update the in-memory cache so the new key is available without a
+    // relogin. Imported lazily to avoid a circular dependency between
+    // nostr.ts and the events store.
+    const { setOwnPrivateEventKey } = await import("../stores/events");
+    setOwnPrivateEventKey(dTag, { viewKey: viewKeyNsec, eventKind });
   } catch (err) {
     console.warn(
       "Failed to publish self-key index (kind 32680):",

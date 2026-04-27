@@ -18,9 +18,11 @@ import {
   getRelays,
   publishToRelays,
   publishDeletionEvent,
+  publishSelfKeyIndex,
+  publishEmptySelfKeyIndex,
 } from "../common/nostr";
 import { EventKinds } from "../common/EventConfigs";
-import { naddrEncode } from "nostr-tools/nip19";
+import { naddrEncode, nsecEncode, decode } from "nostr-tools/nip19";
 import {
   nostrEventToSchedulingPage,
   schedulingPageToTags,
@@ -29,6 +31,12 @@ import type { ISchedulingPage } from "../utils/types";
 import type { SubscriptionHandle } from "../common/nostrRuntime";
 import { nostrRuntime } from "../common/nostrRuntime";
 import { signerManager } from "../common/signer";
+import {
+  ensureOwnPrivateEventKeyIndexLoaded,
+  getOwnPrivateEventKeyIndex,
+  setOwnPrivateEventKey,
+  deleteOwnPrivateEventKey,
+} from "./events";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { isNative } from "../utils/platform";
@@ -75,6 +83,28 @@ async function publishSchedulingPage(page: ISchedulingPage): Promise<{
 
   await publishToRelays(signedEvent);
   nostrRuntime.addEvent(signedEvent);
+
+  // Publish a self-encrypted kind-32680 record so the page is recoverable
+  // on a fresh device or after a refresh on web (where secure storage is
+  // a no-op). Best-effort: failure is logged but non-fatal because the
+  // creator can still copy the share URL from the current session.
+  try {
+    const viewKeyNsec = nsecEncode(viewSecretKey);
+    await publishSelfKeyIndex({
+      dTag: page.id,
+      eventKind: EventKinds.SchedulingPage,
+      viewKeyNsec,
+    });
+    setOwnPrivateEventKey(page.id, {
+      viewKey: viewKeyNsec,
+      eventKind: EventKinds.SchedulingPage,
+    });
+  } catch (err) {
+    console.warn(
+      "Failed to publish self-key index for scheduling page:",
+      err instanceof Error ? err.message : err,
+    );
+  }
 
   return { event: signedEvent, viewKey: viewKeyHex };
 }
@@ -152,10 +182,58 @@ export const useSchedulingPages = create<SchedulingPagesState>((set, get) => ({
     const userPubkey = await getUserPublicKey();
     if (!userPubkey) return;
 
+    // Make sure the kind-32680 self-key index is loaded so we can decrypt
+    // pages we authored on another device (or after a web refresh, where
+    // secure storage is a no-op).
+    void ensureOwnPrivateEventKeyIndexLoaded();
+
     subscriptionHandle = fetchUserSchedulingPages(
       userPubkey,
-      (event) => {
-        const page = nostrEventToSchedulingPage(event);
+      async (event) => {
+        // Outer encrypted form: tags are reduced to [["d", id]] and the
+        // page body lives in `content` as NIP-44 ciphertext. Detect via
+        // missing `title` tag at the outer level (the only tag every
+        // legacy plaintext page must carry alongside `d`).
+        const hasOuterTitle = event.tags.some((t) => t[0] === "title");
+        let parseSource: Event = event;
+        let viewKeyHex: string | undefined;
+
+        if (!hasOuterTitle && event.content) {
+          await ensureOwnPrivateEventKeyIndexLoaded();
+          const dTag = event.tags.find((t) => t[0] === "d")?.[1];
+          if (!dTag) return;
+          const entry = getOwnPrivateEventKeyIndex().get(dTag);
+          if (!entry || entry.eventKind !== EventKinds.SchedulingPage) {
+            // Either someone else's encrypted page (we can't decrypt) or
+            // a tombstoned record (entry deleted). Skip silently.
+            return;
+          }
+          try {
+            const decoded = decode(entry.viewKey);
+            if (decoded.type !== "nsec") {
+              throw new Error(`unexpected viewKey encoding: ${decoded.type}`);
+            }
+            const sk = decoded.data as Uint8Array;
+            viewKeyHex = bytesToHex(sk);
+            const pk = getPublicKey(sk);
+            const conversationKey = nip44.getConversationKey(sk, pk);
+            const decryptedTags = JSON.parse(
+              nip44.decrypt(event.content, conversationKey),
+            ) as string[][];
+            parseSource = { ...event, tags: decryptedTags };
+          } catch (err) {
+            console.warn(
+              `Failed to decrypt own scheduling page d=${dTag}:`,
+              err instanceof Error ? err.message : err,
+            );
+            return;
+          }
+        }
+
+        const page = nostrEventToSchedulingPage(parseSource);
+        if (viewKeyHex) {
+          page.viewKey = viewKeyHex;
+        }
 
         set((state) => {
           const existing = state.pages.find((p) => p.id === page.id);
@@ -227,6 +305,19 @@ export const useSchedulingPages = create<SchedulingPagesState>((set, get) => ({
 
     await deleteSchedulingPageNostr(page);
 
+    // Tombstone the self-key index so other devices stop reconstructing
+    // this page after deletion. Best-effort — failure is non-fatal because
+    // the NIP-09 deletion event above is the canonical signal.
+    try {
+      await publishEmptySelfKeyIndex(page.id);
+    } catch (err) {
+      console.warn(
+        "Failed to tombstone self-key index for scheduling page:",
+        err instanceof Error ? err.message : err,
+      );
+    }
+    deleteOwnPrivateEventKey(page.id);
+
     set((state) => {
       const pages = state.pages.filter((p) => p.id !== pageId);
       saveToStorage(pages);
@@ -250,8 +341,11 @@ export const useSchedulingPages = create<SchedulingPagesState>((set, get) => ({
   getPageUrl: (page) => {
     const naddr = get().getNAddr(page);
     const base = `${window.location.origin}/schedule/${naddr}`;
-    // viewKey is mandatory after vNEXT — always append it.
-    return `${base}?viewKey=${page.viewKey}`;
+    // viewKey is mandatory after vNEXT. If it is missing (e.g. a stale
+    // legacy entry surfaced before recovery completed), return the bare
+    // naddr URL so the unsupported notice is shown rather than a literal
+    // "?viewKey=undefined".
+    return page.viewKey ? `${base}?viewKey=${page.viewKey}` : base;
   },
 
   clearCachedPages: async () => {

@@ -109,6 +109,8 @@ let ownPrivateEventKeyIndex:
   | Map<string, { viewKey: string; eventKind: number }>
   | undefined;
 
+let ownPrivateEventKeyIndexLoadPromise: Promise<void> | undefined;
+
 export async function refreshOwnPrivateEventKeyIndex(): Promise<void> {
   try {
     ownPrivateEventKeyIndex = await fetchOwnPrivateEventKeys();
@@ -119,6 +121,45 @@ export async function refreshOwnPrivateEventKeyIndex(): Promise<void> {
     );
     ownPrivateEventKeyIndex = ownPrivateEventKeyIndex ?? new Map();
   }
+}
+
+/**
+ * Ensures the self-key index has been loaded at least once. Concurrent
+ * callers share the same in-flight promise; subsequent calls after the
+ * first successful load resolve immediately.
+ */
+export async function ensureOwnPrivateEventKeyIndexLoaded(): Promise<void> {
+  if (ownPrivateEventKeyIndex) return;
+  if (!ownPrivateEventKeyIndexLoadPromise) {
+    ownPrivateEventKeyIndexLoadPromise = refreshOwnPrivateEventKeyIndex().finally(
+      () => {
+        ownPrivateEventKeyIndexLoadPromise = undefined;
+      },
+    );
+  }
+  await ownPrivateEventKeyIndexLoadPromise;
+}
+
+/**
+ * Inserts or replaces an entry in the self-key index cache. Called after
+ * a successful kind-32680 publish so the new key is available without a
+ * relogin.
+ */
+export function setOwnPrivateEventKey(
+  dTag: string,
+  value: { viewKey: string; eventKind: number },
+): void {
+  if (!ownPrivateEventKeyIndex) ownPrivateEventKeyIndex = new Map();
+  ownPrivateEventKeyIndex.set(dTag, value);
+}
+
+/**
+ * Removes an entry from the self-key index cache. Mirrors a tombstone
+ * publish so a deleted event's key is dropped locally without waiting
+ * for a refresh.
+ */
+export function deleteOwnPrivateEventKey(dTag: string): void {
+  ownPrivateEventKeyIndex?.delete(dTag);
 }
 
 export function getOwnPrivateEventKeyIndex(): Map<
