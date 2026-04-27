@@ -20,6 +20,7 @@ import {
   fetchCalendarEvents,
   fetchPrivateCalendarEvents,
   viewPrivateEvent,
+  fetchOwnPrivateEventKeys,
 } from "../common/nostr";
 import { isValid } from "date-fns";
 import {
@@ -96,6 +97,36 @@ const syncEventNotifications = async (
 
 let publicSubscription: SubscriptionHandle | undefined;
 let privateSubscription: SubscriptionHandle | undefined;
+
+/**
+ * Cached map of `dTag -> { viewKey, eventKind }` for the current user's
+ * own private events, populated from kind-32680 self-key index records.
+ * Acts as a fallback for `fetchPrivateEvents` when the calendar list does
+ * not carry a viewKey for an event the user authored — typically when the
+ * event was created on another device and the calendar list hasn't synced.
+ */
+let ownPrivateEventKeyIndex:
+  | Map<string, { viewKey: string; eventKind: number }>
+  | undefined;
+
+export async function refreshOwnPrivateEventKeyIndex(): Promise<void> {
+  try {
+    ownPrivateEventKeyIndex = await fetchOwnPrivateEventKeys();
+  } catch (err) {
+    console.warn(
+      "Failed to load self-key index (kind 32680):",
+      err instanceof Error ? err.message : err,
+    );
+    ownPrivateEventKeyIndex = ownPrivateEventKeyIndex ?? new Map();
+  }
+}
+
+export function getOwnPrivateEventKeyIndex(): Map<
+  string,
+  { viewKey: string; eventKind: number }
+> {
+  return ownPrivateEventKeyIndex ?? new Map();
+}
 
 export { ICalendarEvent, RSVPResponse };
 
@@ -363,8 +394,14 @@ export const useTimeBasedEvents = create<{
       authorPubkeys.add(parsed.authorPubkey);
       kinds.add(parsed.kind);
       if (parsed.relayUrl) hintRelays.add(parsed.relayUrl);
+      // Fall back to the self-key index when the calendar list ref does
+      // not carry a viewKey \u2014 typically because the event was authored on
+      // another device and the calendar list hasn't synced yet.
+      const fallback = !parsed.viewKey
+        ? getOwnPrivateEventKeyIndex().get(parsed.eventDTag)?.viewKey
+        : undefined;
       viewKeyMap.set(parsed.eventDTag, {
-        viewKey: parsed.viewKey,
+        viewKey: parsed.viewKey || fallback || "",
         calendarId: refToCalendarId.get(ref[0]) || "",
         relayUrl: parsed.relayUrl,
       });

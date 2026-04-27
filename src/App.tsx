@@ -14,7 +14,10 @@ import { Header } from "./components/Header";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { addNotificationClickListener } from "./utils/notifications";
-import { useTimeBasedEvents } from "./stores/events";
+import {
+  useTimeBasedEvents,
+  refreshOwnPrivateEventKeyIndex,
+} from "./stores/events";
 import { isNative } from "./utils/platform";
 import { setSecureItem } from "./common/localStorage";
 import { BG_KEY_LAST_INVITATION_FETCH_TIME } from "./utils/constants";
@@ -79,7 +82,11 @@ function Application() {
   // or when the user toggles calendar visibility.
   useEffect(() => {
     if (user && isInitialized && calendarsLoaded) {
-      events.fetchPrivateEvents();
+      // Refresh the self-key index FIRST so fetchPrivateEvents can use it
+      // as a fallback when the calendar list lacks viewKeys for own events.
+      void refreshOwnPrivateEventKeyIndex().then(() =>
+        events.fetchPrivateEvents(),
+      );
       fetchInvitations();
       // Pre-fetch the user's own public busy lists for the current and
       // adjacent months so add/remove operations merge with the latest

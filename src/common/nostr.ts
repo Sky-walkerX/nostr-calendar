@@ -246,6 +246,22 @@ export async function publishPrivateCalendarEvent(
     viewKey: nip19.nsecEncode(viewSecretKey),
   });
 
+  // Publish a self-encrypted kind-32680 record so the creator can recover
+  // viewKey on a fresh device even if the calendar list (32123) was lost
+  // or out-of-sync. Best-effort: failure is logged but non-fatal.
+  try {
+    await publishSelfKeyIndex({
+      dTag,
+      eventKind,
+      viewKeyNsec: nip19.nsecEncode(viewSecretKey),
+    });
+  } catch (err) {
+    console.warn(
+      "Failed to publish self-key index (kind 32680):",
+      err instanceof Error ? err.message : err,
+    );
+  }
+
   return {
     eventRef,
     authorPubkey: userPublicKey,
@@ -837,4 +853,134 @@ export async function fetchBusyListsForUser(
     if (list) lists.push(list);
   }
   return lists;
+}
+
+// --- Creator self-key index (kind 32680) ---
+
+/**
+ * Encrypted payload schema for kind 32680 events. The shape is versioned
+ * so we can extend the schema without rotating the kind.
+ */
+interface SelfKeyIndexPayload {
+  v: 1;
+  /** NIP-19 nsec encoding of the event's viewKey. */
+  viewKey: string;
+  /** The kind of the private calendar event this key unlocks (32678 / 32679). */
+  eventKind: number;
+  /** d-tag of the private calendar event. */
+  dTag: string;
+  /** Unix-seconds timestamp of when the key index was published. */
+  createdAt: number;
+}
+
+/**
+ * Publishes a self-encrypted kind-32680 event recording `viewKey` for one
+ * private calendar event the current user authored. Replaces any prior
+ * version (parameterized-replaceable per `(pubkey, d-tag)`).
+ *
+ * `content === ""` is reserved for tombstones; callers wishing to revoke
+ * a key should publish an empty payload via `publishEmptySelfKeyIndex`.
+ */
+export async function publishSelfKeyIndex(params: {
+  dTag: string;
+  eventKind: number;
+  viewKeyNsec: string;
+}): Promise<Event> {
+  const userPubkey = await getUserPublicKey();
+  const signer = await signerManager.getSigner();
+  if (!signer.nip44Encrypt) {
+    throw new Error(
+      "publishSelfKeyIndex requires a NIP-44-capable signer (none available)",
+    );
+  }
+  const payload: SelfKeyIndexPayload = {
+    v: 1,
+    viewKey: params.viewKeyNsec,
+    eventKind: params.eventKind,
+    dTag: params.dTag,
+    createdAt: Math.floor(Date.now() / 1000),
+  };
+  const encrypted = await signer.nip44Encrypt(
+    userPubkey,
+    JSON.stringify(payload),
+  );
+  const baseEvent: UnsignedEvent = {
+    kind: EventKinds.PrivateCalendarEventKey,
+    pubkey: userPubkey,
+    tags: [["d", params.dTag]],
+    content: encrypted,
+    created_at: payload.createdAt,
+  };
+  const signedEvent = await signer.signEvent(baseEvent);
+  signedEvent.id = getEventHash(baseEvent);
+  await publishToRelays(signedEvent);
+  nostrRuntime.addEvent(signedEvent);
+  return signedEvent;
+}
+
+/**
+ * Publishes a tombstone (empty-content) kind-32680 event for the given
+ * d-tag. Used when the creator deletes the underlying private event.
+ */
+export async function publishEmptySelfKeyIndex(dTag: string): Promise<Event> {
+  const userPubkey = await getUserPublicKey();
+  const signer = await signerManager.getSigner();
+  const baseEvent: UnsignedEvent = {
+    kind: EventKinds.PrivateCalendarEventKey,
+    pubkey: userPubkey,
+    tags: [["d", dTag]],
+    content: "",
+    created_at: Math.floor(Date.now() / 1000),
+  };
+  const signedEvent = await signer.signEvent(baseEvent);
+  signedEvent.id = getEventHash(baseEvent);
+  await publishToRelays(signedEvent);
+  nostrRuntime.addEvent(signedEvent);
+  return signedEvent;
+}
+
+/**
+ * Fetches all kind-32680 self-key index events for the current user and
+ * decrypts them. Returns a `Map<dTag, viewKeyNsec>`. Tombstones (empty
+ * content) and entries the signer cannot decrypt are skipped.
+ */
+export async function fetchOwnPrivateEventKeys(): Promise<
+  Map<string, { viewKey: string; eventKind: number }>
+> {
+  const userPubkey = await getUserPublicKey();
+  const filter: Filter = {
+    kinds: [EventKinds.PrivateCalendarEventKey],
+    authors: [userPubkey],
+  };
+  const events = await nostrRuntime.querySync(getRelays(), filter);
+  const signer = await signerManager.getSigner();
+  if (!signer.nip44Decrypt) return new Map();
+
+  const result = new Map<string, { viewKey: string; eventKind: number }>();
+  for (const event of events) {
+    const dTag = event.tags.find((t) => t[0] === "d")?.[1];
+    if (!dTag) continue;
+    if (!event.content) continue; // tombstone
+    try {
+      const decrypted = await signer.nip44Decrypt(userPubkey, event.content);
+      const payload = JSON.parse(decrypted) as Partial<SelfKeyIndexPayload>;
+      if (
+        payload &&
+        typeof payload.viewKey === "string" &&
+        typeof payload.eventKind === "number" &&
+        payload.dTag === dTag
+      ) {
+        result.set(dTag, {
+          viewKey: payload.viewKey,
+          eventKind: payload.eventKind,
+        });
+      }
+    } catch (err) {
+      console.warn(
+        `Failed to decrypt self-key index for d=${dTag}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+  return result;
 }
