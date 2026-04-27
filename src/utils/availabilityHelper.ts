@@ -320,15 +320,11 @@ export function expandAvailabilitySlots(
       );
 
       for (const unblockedSlot of unblockedSlots) {
+        // Keep the window at its original grid-aligned start so that
+        // splitIntoBookableSlots produces clean slots (09:00, 09:45 …).
+        // Filtering by minNotice / "now" is done per-slot in getBookableSlots.
         if (unblockedSlot.end > earliestStart && unblockedSlot.start < effectiveTo) {
-          // Clamp start to earliestStart if needed
-          const clampedStart =
-            unblockedSlot.start < earliestStart
-              ? earliestStart
-              : unblockedSlot.start;
-          if (clampedStart < unblockedSlot.end) {
-            slots.push({ start: clampedStart, end: unblockedSlot.end });
-          }
+          slots.push(unblockedSlot);
         }
       }
     }
@@ -441,11 +437,13 @@ export function getBookableSlots(
     allSlots.push(...slots);
   }
 
-  // Filter out past slots and dedupe exact overlaps produced by
-  // combining recurring and one-off windows on the same date/time.
+  // Filter out slots whose start is before now + minNotice.  We do this here
+  // (not by clamping the window start) so splitIntoBookableSlots always runs
+  // from the clean grid origin and produces times like 09:00, 09:45, 10:30.
+  const earliestSlotStart = new Date(now.getTime() + page.minNotice * 1000);
   const deduped = new Map<string, ITimeSlot>();
   for (const slot of allSlots) {
-    if (isSlotInPast(slot, now)) continue;
+    if (slot.start < earliestSlotStart) continue;
 
     // Drop any slot overlapping a public busy range from the host.
     const slotStart = slot.start.getTime();
