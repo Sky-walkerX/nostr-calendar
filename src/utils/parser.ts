@@ -197,7 +197,7 @@ export const schedulingPageToTags = (page: ISchedulingPage): string[][] => {
     ["d", page.id],
     ["title", page.title],
     ["duration_mode", page.durationMode],
-    ["timezone", "UTC"],
+    ["timezone", page.timezone || "UTC"],
     ["min_notice", "0"],
     ["max_advance", String(page.maxAdvance)],
     ["buffer", String(page.buffer)],

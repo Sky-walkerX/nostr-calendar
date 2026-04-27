@@ -283,13 +283,23 @@ export const SchedulingPageEdit = () => {
   const handleSave = async () => {
     setProcessing(true);
     try {
+      // Auto-detect the host's timezone from the browser. The host enters
+      // availability windows like "09:00" thinking in their own local time;
+      // storing that timezone alongside lets viewers in any other timezone
+      // see the host's "9 AM" anchored correctly. Falls back to UTC if the
+      // browser refuses to report a tz (very old environments).
+      const browserTimezone =
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
       const pageData: Omit<
         ISchedulingPage,
         "id" | "eventId" | "user" | "createdAt"
       > = {
         ...formData,
         blockedDates: blockedWindows.map(serializeBlockedWindow),
-        timezone: "UTC",
+        timezone:
+          isEditMode && existingPage?.timezone
+            ? existingPage.timezone
+            : browserTimezone,
         minNotice: 0,
         durationMode: "fixed",
         eventTitle: formData.eventTitle || undefined,

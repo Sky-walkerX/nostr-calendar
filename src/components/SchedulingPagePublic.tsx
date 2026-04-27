@@ -363,10 +363,12 @@ export const SchedulingPagePublic = () => {
 
   const formatTime = (value: number | Date) => {
     if (!page) return "";
+    // No `timeZone` option => the browser renders in the viewer's local tz,
+    // which is exactly what we want. The host's tz is baked into the slot's
+    // absolute timestamp via page.timezone during slot expansion.
     return new Intl.DateTimeFormat(undefined, {
       hour: "2-digit",
       minute: "2-digit",
-      timeZone: page.timezone,
     }).format(value);
   };
 
@@ -590,9 +592,6 @@ export const SchedulingPagePublic = () => {
                 <Typography variant="body1">
                   {formatTime(selectedSlot.start)} –{" "}
                   {formatTime(selectedSlot.end)}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Timezone: {page.timezone}
                 </Typography>
               </Box>
               <TextField
