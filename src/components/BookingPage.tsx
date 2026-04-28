@@ -490,89 +490,102 @@ export const BookingPage = () => {
         {/* Slots grid */}
         <Box
           sx={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(7, 1fr)",
-            gap: 1.5,
+            overflowX: { xs: "auto", md: "visible" },
+            mx: { xs: -2, md: 0 },
           }}
         >
-          {weekDays.map((day) => {
-            const dateKey = day.format("YYYY-MM-DD");
-            const daySlots = slotsByDate[dateKey] || [];
-            const isToday = day.isSame(dayjs(), "day");
-            const isPast = day.isBefore(dayjs(), "day");
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "repeat(7, minmax(130px, 1fr))",
+                md: "repeat(7, minmax(0, 1fr))",
+              },
+              gap: 1.5,
+              minWidth: { xs: "min-content", md: "auto" },
+              px: { xs: 2, md: 0 },
+              pb: { xs: 0.5, md: 0 },
+            }}
+          >
+            {weekDays.map((day) => {
+              const dateKey = day.format("YYYY-MM-DD");
+              const daySlots = slotsByDate[dateKey] || [];
+              const isToday = day.isSame(dayjs(), "day");
+              const isPast = day.isBefore(dayjs(), "day");
 
-            return (
-              <Paper
-                key={dateKey}
-                variant="outlined"
-                sx={{
-                  p: 1.5,
-                  minHeight: 120,
-                  opacity: isPast ? 0.5 : 1,
-                  backgroundColor: isToday
-                    ? "action.hover"
-                    : "background.paper",
-                }}
-              >
-                <Typography
-                  variant="caption"
-                  fontWeight={isToday ? 700 : 400}
-                  sx={{ display: "block", mb: 1, textAlign: "center" }}
+              return (
+                <Paper
+                  key={dateKey}
+                  variant="outlined"
+                  sx={{
+                    p: 1.5,
+                    minHeight: 120,
+                    opacity: isPast ? 0.5 : 1,
+                    backgroundColor: isToday
+                      ? "action.hover"
+                      : "background.paper",
+                  }}
                 >
-                  {day.format("ddd")}
-                  <br />
-                  {day.format("MMM D")}
-                </Typography>
-                {daySlots.length === 0 ? (
                   <Typography
                     variant="caption"
-                    color="text.secondary"
-                    sx={{ display: "block", textAlign: "center" }}
+                    fontWeight={isToday ? 700 : 400}
+                    sx={{ display: "block", mb: 1, textAlign: "center" }}
                   >
-                    —
+                    {day.format("ddd")}
+                    <br />
+                    {day.format("MMM D")}
                   </Typography>
-                ) : (
-                  <Box
-                    sx={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 0.5,
-                    }}
-                  >
-                    {daySlots.map((slot, i) => {
-                      const disabled = !!slot.unavailable;
-                      return (
-                        <Button
-                          key={i}
-                          size="small"
-                          disabled={disabled}
-                          variant={
-                            selectedSlot === slot ? "contained" : "outlined"
-                          }
-                          onClick={() =>
-                            disabled ? undefined : handleSlotClick(slot)
-                          }
-                          sx={{
-                            fontSize: "0.7rem",
-                            py: 0.25,
-                            px: 0.5,
-                            minWidth: 0,
-                            textTransform: "none",
-                            ...(disabled && {
-                              opacity: 0.45,
-                              textDecoration: "line-through",
-                            }),
-                          }}
-                        >
-                          {formatTime(slot.start)}
-                        </Button>
-                      );
-                    })}
-                  </Box>
-                )}
-              </Paper>
-            );
-          })}
+                  {daySlots.length === 0 ? (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: "block", textAlign: "center" }}
+                    >
+                      —
+                    </Typography>
+                  ) : (
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 0.5,
+                      }}
+                    >
+                      {daySlots.map((slot, i) => {
+                        const disabled = !!slot.unavailable;
+                        return (
+                          <Button
+                            key={i}
+                            size="small"
+                            disabled={disabled}
+                            variant={
+                              selectedSlot === slot ? "contained" : "outlined"
+                            }
+                            onClick={() =>
+                              disabled ? undefined : handleSlotClick(slot)
+                            }
+                            sx={{
+                              fontSize: "0.7rem",
+                              py: 0.25,
+                              px: 0.5,
+                              minWidth: 0,
+                              textTransform: "none",
+                              ...(disabled && {
+                                opacity: 0.45,
+                                textDecoration: "line-through",
+                              }),
+                            }}
+                          >
+                            {formatTime(slot.start)}
+                          </Button>
+                        );
+                      })}
+                    </Box>
+                  )}
+                </Paper>
+              );
+            })}
+          </Box>
         </Box>
 
         {slots.length === 0 && (
