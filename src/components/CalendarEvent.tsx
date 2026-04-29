@@ -57,6 +57,8 @@ import { EventCalendarListManagement } from "./EventCalendarListManagement";
 import { signerManager } from "../common/signer";
 import { generateSecretKey } from "nostr-tools";
 import { bytesToHex } from "nostr-tools/utils";
+import { FormFillerDialog } from "./FormFillerDialog";
+import type { IFormAttachment } from "../utils/types";
 
 interface CalendarEventCardProps {
   event: PositionedEvent;
@@ -379,6 +381,7 @@ export function CalendarEvent({ event }: CalendarEventViewProps) {
   const { calendars, moveEventToCalendar } = useCalendarLists();
   const { updateEvent } = useTimeBasedEvents();
   const eventCoordinate = getCalendarEventCoordinate(event);
+  const [activeForm, setActiveForm] = useState<IFormAttachment | null>(null);
 
   const calendar = event.calendarId
     ? calendars.find((c) => c.id === event.calendarId)
@@ -477,6 +480,46 @@ export function CalendarEvent({ event }: CalendarEventViewProps) {
             </>
           )}
 
+          {event.forms && event.forms.length > 0 && (
+            <>
+              <Typography variant="subtitle1">
+                {intl.formatMessage({ id: "event.forms" })}
+              </Typography>
+              <Stack spacing={1}>
+                {event.forms.map((f, i) => (
+                  <Box
+                    key={`${f.naddr}-${i}`}
+                    display="flex"
+                    alignItems="center"
+                    gap={1}
+                    flexWrap="wrap"
+                  >
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => setActiveForm(f)}
+                    >
+                      {intl.formatMessage({ id: "form.fillOut" })}
+                    </Button>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{
+                        fontFamily: "monospace",
+                        wordBreak: "break-all",
+                      }}
+                    >
+                      {f.naddr.length > 24
+                        ? `${f.naddr.slice(0, 12)}…${f.naddr.slice(-8)}`
+                        : f.naddr}
+                    </Typography>
+                  </Box>
+                ))}
+              </Stack>
+              <Divider />
+            </>
+          )}
+
           <Box display={"flex"} flexWrap={"wrap"} gap={1}>
             <Typography width={"100%"} fontWeight={600}>
               {intl.formatMessage({ id: "navigation.participants" })}
@@ -508,6 +551,12 @@ export function CalendarEvent({ event }: CalendarEventViewProps) {
           <ScheduledNotificationsSection eventId={event.id} />
         </Stack>
       </Box>
+      <FormFillerDialog
+        open={!!activeForm}
+        attachment={activeForm}
+        onClose={() => setActiveForm(null)}
+        onSubmitted={() => setActiveForm(null)}
+      />
     </Box>
   );
 }
