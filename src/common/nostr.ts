@@ -133,6 +133,15 @@ async function preparePrivateCalendarEvent(
     eventData.push(["notification", event.notificationPreference]);
   }
 
+  event.forms?.forEach((form) => {
+    if (!form?.naddr) return;
+    if (form.responseKey) {
+      eventData.push(["form", form.naddr, form.responseKey]);
+    } else {
+      eventData.push(["form", form.naddr]);
+    }
+  });
+
   event.location.forEach((loc) => {
     eventData.push(["location", loc]);
   });

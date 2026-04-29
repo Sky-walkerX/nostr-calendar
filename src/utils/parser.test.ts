@@ -153,7 +153,9 @@ describe("nostrEventToCalendar", () => {
       ],
     });
     const result = nostrEventToCalendar(event);
-    expect(result.repeat.rrule).toBe("FREQ=DAILY;COUNT=5;UNTIL=20250430T100000Z");
+    expect(result.repeat.rrule).toBe(
+      "FREQ=DAILY;COUNT=5;UNTIL=20250430T100000Z",
+    );
   });
 
   it("sets repeat.rrule to null for non-recurring events", () => {
@@ -233,5 +235,50 @@ describe("nostrEventToCalendar", () => {
     expect(result.reference).toEqual(["https://nostr.com"]);
     expect(result.image).toBe("https://img.com/pic.png");
     expect(result.repeat.rrule).toBe("FREQ=DAILY");
+  });
+});
+
+describe("nostrEventToCalendar form tags", () => {
+  it("returns undefined forms when no form tag is present", () => {
+    const result = nostrEventToCalendar(makeNostrEvent());
+    expect(result.forms).toBeUndefined();
+  });
+
+  it("parses a form tag with naddr only", () => {
+    const result = nostrEventToCalendar(
+      makeNostrEvent({ tags: [["form", "naddr1abc"]] }),
+    );
+    expect(result.forms).toEqual([{ naddr: "naddr1abc" }]);
+  });
+
+  it("parses a form tag with naddr and responseKey", () => {
+    const result = nostrEventToCalendar(
+      makeNostrEvent({ tags: [["form", "naddr1abc", "key-1"]] }),
+    );
+    expect(result.forms).toEqual([
+      { naddr: "naddr1abc", responseKey: "key-1" },
+    ]);
+  });
+
+  it("parses multiple form tags", () => {
+    const result = nostrEventToCalendar(
+      makeNostrEvent({
+        tags: [
+          ["form", "naddr1aaa"],
+          ["form", "naddr1bbb", "k2"],
+        ],
+      }),
+    );
+    expect(result.forms).toEqual([
+      { naddr: "naddr1aaa" },
+      { naddr: "naddr1bbb", responseKey: "k2" },
+    ]);
+  });
+
+  it("ignores empty-value form tags", () => {
+    const result = nostrEventToCalendar(
+      makeNostrEvent({ tags: [["form", ""]] }),
+    );
+    expect(result.forms).toBeUndefined();
   });
 });
