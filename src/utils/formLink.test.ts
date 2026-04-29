@@ -4,6 +4,7 @@ import {
   buildFormstrUrl,
   extractNaddr,
   extractViewKey,
+  getFormAuthorPubkey,
   getFormCoordinate,
   getFormRelayHints,
   parseFormInput,
@@ -212,5 +213,16 @@ describe("getFormRelayHints", () => {
 
   it("returns empty array for invalid input", () => {
     expect(getFormRelayHints("garbage")).toEqual([]);
+  });
+});
+
+describe("getFormAuthorPubkey", () => {
+  it("returns the decoded pubkey", () => {
+    expect(getFormAuthorPubkey(SAMPLE_NADDR)).toBe(SAMPLE_PUBKEY);
+  });
+
+  it("returns null for invalid input", () => {
+    expect(getFormAuthorPubkey("garbage")).toBeNull();
+    expect(getFormAuthorPubkey("")).toBeNull();
   });
 });

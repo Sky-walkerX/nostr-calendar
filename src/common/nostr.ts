@@ -821,3 +821,37 @@ export const fetchUserFormResponse = async (
     current.created_at > latest.created_at ? current : latest,
   );
 };
+
+/**
+ * Fetches all NIP-101 form responses (kind 1069) for the form addressed
+ * by `formCoordinate`. Used by the form owner to view responses.
+ *
+ * Note: per NIP-101, encrypted forms produce ciphertext content that
+ * this helper cannot decode — callers should detect encryption from the
+ * form template settings and surface an external Formstr link instead
+ * of trying to render encrypted payloads in-app.
+ *
+ * Responses are returned newest-first.
+ */
+export const fetchFormResponses = async (
+  formCoordinate: string,
+  extraRelays: string[] = [],
+): Promise<Event[]> => {
+  const relays = [...new Set([...defaultRelays, ...extraRelays])];
+  const events = await nostrRuntime.querySync(relays, {
+    kinds: [EventKinds.FormResponse],
+    "#a": [formCoordinate],
+  });
+  // Dedupe by author (latest response wins) when multiple submissions
+  // exist from the same pubkey.
+  const latestByAuthor = new Map<string, Event>();
+  for (const event of events) {
+    const prev = latestByAuthor.get(event.pubkey);
+    if (!prev || event.created_at > prev.created_at) {
+      latestByAuthor.set(event.pubkey, event);
+    }
+  }
+  return [...latestByAuthor.values()].sort(
+    (a, b) => b.created_at - a.created_at,
+  );
+};
