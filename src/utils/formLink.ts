@@ -158,3 +158,19 @@ export function getFormRelayHints(naddr: string): string[] {
     return [];
   }
 }
+
+/**
+ * Returns the form-author pubkey (decoded from the naddr) — i.e. the
+ * pubkey that owns the kind-30168 form-template event and can publish
+ * updates to it. This is the authoritative ownership check; the
+ * `pubkey` tag inside the template body is informational only.
+ */
+export function getFormAuthorPubkey(naddr: string): string | null {
+  try {
+    const decoded = nip19.decode(naddr);
+    if (decoded.type !== "naddr") return null;
+    return decoded.data.pubkey;
+  } catch {
+    return null;
+  }
+}

@@ -58,6 +58,8 @@ import { signerManager } from "../common/signer";
 import { generateSecretKey } from "nostr-tools";
 import { bytesToHex } from "nostr-tools/utils";
 import { FormFillerDialog } from "./FormFillerDialog";
+import { FormResponsesDialog } from "./FormResponsesDialog";
+import { getFormAuthorPubkey } from "../utils/formLink";
 import type { IFormAttachment } from "../utils/types";
 import { useFormSubmissionStatus } from "../hooks/useFormSubmissionStatus";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
@@ -384,6 +386,9 @@ export function CalendarEvent({ event }: CalendarEventViewProps) {
   const { updateEvent } = useTimeBasedEvents();
   const eventCoordinate = getCalendarEventCoordinate(event);
   const [activeForm, setActiveForm] = useState<IFormAttachment | null>(null);
+  const [responsesForm, setResponsesForm] = useState<IFormAttachment | null>(
+    null,
+  );
 
   const calendar = event.calendarId
     ? calendars.find((c) => c.id === event.calendarId)
@@ -492,7 +497,9 @@ export function CalendarEvent({ event }: CalendarEventViewProps) {
                   <FormAttachmentRow
                     key={`${f.naddr}-${i}`}
                     form={f}
+                    eventAuthor={event.user}
                     onFill={() => setActiveForm(f)}
+                    onViewResponses={() => setResponsesForm(f)}
                   />
                 ))}
               </Stack>
@@ -537,21 +544,40 @@ export function CalendarEvent({ event }: CalendarEventViewProps) {
         onClose={() => setActiveForm(null)}
         onSubmitted={() => setActiveForm(null)}
       />
+      <FormResponsesDialog
+        open={!!responsesForm}
+        attachment={responsesForm}
+        onClose={() => setResponsesForm(null)}
+      />
     </Box>
   );
 }
 
 function FormAttachmentRow({
   form,
+  eventAuthor,
   onFill,
+  onViewResponses,
 }: {
   form: IFormAttachment;
+  eventAuthor: string;
   onFill: () => void;
+  onViewResponses: () => void;
 }) {
   const intl = useIntl();
   const { user } = useUser();
   const { status } = useFormSubmissionStatus(form.naddr, user?.pubkey);
   const submitted = status.state === "submitted";
+  // Owners-only "View responses" entry: gated by both event-edit access
+  // (user authored the calendar event) and form ownership (user authored
+  // the kind-30168 template). The form-author check is the authoritative
+  // one — only they can read all responses on Nostr — but we additionally
+  // require event-edit access so this surface only shows up for users who
+  // were already in a position to manage the event.
+  const isFormOwner =
+    !!user?.pubkey && getFormAuthorPubkey(form.naddr) === user.pubkey;
+  const hasEditAccess = !!user?.pubkey && eventAuthor === user.pubkey;
+  const canViewResponses = isFormOwner && hasEditAccess;
   return (
     <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
       <Button
@@ -564,6 +590,11 @@ function FormAttachmentRow({
           id: submitted ? "form.viewOrUpdate" : "form.fillOut",
         })}
       </Button>
+      {canViewResponses && (
+        <Button variant="text" size="small" onClick={onViewResponses}>
+          {intl.formatMessage({ id: "formResponses.viewButton" })}
+        </Button>
+      )}
       <Typography
         variant="caption"
         color="text.secondary"
