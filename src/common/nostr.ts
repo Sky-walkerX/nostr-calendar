@@ -133,6 +133,18 @@ async function preparePrivateCalendarEvent(
     eventData.push(["notification", event.notificationPreference]);
   }
 
+  event.forms?.forEach((form) => {
+    if (!form?.naddr) return;
+    // viewKey is the form's read-only NIP-44 decryption key. We deliberately
+    // never persist a Formstr `responseKey` (admin/edit secret) on a calendar
+    // event \u2014 doing so would grant every recipient write access to the form.
+    if (form.viewKey) {
+      eventData.push(["form", form.naddr, form.viewKey]);
+    } else {
+      eventData.push(["form", form.naddr]);
+    }
+  });
+
   event.location.forEach((loc) => {
     eventData.push(["location", loc]);
   });
