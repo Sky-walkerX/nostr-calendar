@@ -119,6 +119,16 @@ const dictionary: NestedObject = {
       duplicateFormInput: "That form is already attached.",
       formsPrivateOnly: "Forms can only be attached to private events.",
     },
+    form: {
+      fillTitle: "Fill out form",
+      fillOut: "Fill out",
+      cancel: "Cancel",
+      submitting: "Submitting…",
+      retry: "Retry",
+      openExternal: "Open in Formstr",
+      fetchError: "Could not load the form. Please try again.",
+      submitError: "Could not submit your response. Please try again.",
+    },
     deleteEvent: {
       title: "Delete Event",
       deleteForEveryone: "Delete for all participants",
@@ -337,6 +347,18 @@ const dictionary: NestedObject = {
       duplicateFormInput: "Dieses Formular ist bereits angehängt.",
       formsPrivateOnly:
         "Formulare können nur an private Termine angehängt werden.",
+    },
+    form: {
+      fillTitle: "Formular ausfüllen",
+      fillOut: "Ausfüllen",
+      cancel: "Abbrechen",
+      submitting: "Wird gesendet…",
+      retry: "Erneut versuchen",
+      openExternal: "In Formstr öffnen",
+      fetchError:
+        "Das Formular konnte nicht geladen werden. Bitte versuchen Sie es erneut.",
+      submitError:
+        "Ihre Antwort konnte nicht gesendet werden. Bitte versuchen Sie es erneut.",
     },
     deleteEvent: {
       title: "Termin löschen",
