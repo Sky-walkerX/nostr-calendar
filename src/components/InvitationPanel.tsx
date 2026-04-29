@@ -23,6 +23,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate } from "react-router";
 import { useInvitations } from "../stores/invitations";
 import { AddToCalendarDialog } from "./AddToCalendarDialog";
+import { FormFillerDialog } from "./FormFillerDialog";
 import { TimeRenderer } from "./TimeRenderer";
 import { Participant } from "./Participant";
 import type { ICalendarEvent } from "../utils/types";
@@ -45,6 +46,14 @@ export function InvitationPanel() {
     null,
   );
   const [addDialogGiftWrapId, setAddDialogGiftWrapId] = useState<string>("");
+  // Pending acceptance after AddToCalendarDialog confirms — we hold here while
+  // walking through any attached forms before finalizing the accept.
+  const [pendingAccept, setPendingAccept] = useState<{
+    giftWrapId: string;
+    calendarId: string;
+    event: ICalendarEvent;
+    formIndex: number;
+  } | null>(null);
   const pendingInvitations = invitations
     .filter((inv) => inv.status === "pending")
     .sort((a, b) => b.receivedAt - a.receivedAt);
@@ -58,8 +67,30 @@ export function InvitationPanel() {
   };
 
   const handleAcceptConfirm = async (calendarId: string) => {
-    await acceptInvitation(addDialogGiftWrapId, calendarId);
+    const event = addDialogEvent;
+    const giftWrapId = addDialogGiftWrapId;
     setAddDialogEvent(null);
+    if (!event) return;
+    const forms = event.forms ?? [];
+    if (forms.length > 0) {
+      // Walk forms first; only finalize accept after they're submitted.
+      setPendingAccept({ giftWrapId, calendarId, event, formIndex: 0 });
+      return;
+    }
+    await acceptInvitation(giftWrapId, calendarId);
+  };
+
+  const advanceForm = async () => {
+    if (!pendingAccept) return;
+    const next = pendingAccept.formIndex + 1;
+    const forms = pendingAccept.event.forms ?? [];
+    if (next >= forms.length) {
+      const { giftWrapId, calendarId } = pendingAccept;
+      setPendingAccept(null);
+      await acceptInvitation(giftWrapId, calendarId);
+    } else {
+      setPendingAccept({ ...pendingAccept, formIndex: next });
+    }
   };
 
   return (
@@ -174,6 +205,23 @@ export function InvitationPanel() {
           onAccept={handleAcceptConfirm}
         />
       )}
+
+      {/* Form filler — runs after calendar selection, before accept finalizes */}
+      {pendingAccept &&
+        (pendingAccept.event.forms ?? [])[pendingAccept.formIndex] && (
+          <FormFillerDialog
+            open
+            attachment={
+              (pendingAccept.event.forms ?? [])[pendingAccept.formIndex]
+            }
+            index={pendingAccept.formIndex + 1}
+            total={(pendingAccept.event.forms ?? []).length}
+            onClose={() => setPendingAccept(null)}
+            onSubmitted={() => {
+              void advanceForm();
+            }}
+          />
+        )}
     </Box>
   );
 }
