@@ -4,6 +4,8 @@ import {
   buildFormstrUrl,
   extractNaddr,
   extractResponseKey,
+  getFormCoordinate,
+  getFormRelayHints,
   parseFormInput,
 } from "./formLink";
 
@@ -150,5 +152,38 @@ describe("buildFormstrUrl", () => {
     expect(buildFormstrUrl({ naddr: SAMPLE_NADDR, responseKey: "a/b" })).toBe(
       `https://formstr.app/f/${SAMPLE_NADDR}?viewKey=a%2Fb`,
     );
+  });
+});
+
+describe("getFormCoordinate", () => {
+  it("returns kind:pubkey:dtag for a valid naddr", () => {
+    expect(getFormCoordinate(SAMPLE_NADDR)).toBe(
+      `${FORM_KIND}:${SAMPLE_PUBKEY}:demo-form`,
+    );
+  });
+
+  it("returns null for non-naddr input", () => {
+    expect(getFormCoordinate("not-an-naddr")).toBeNull();
+    expect(getFormCoordinate("")).toBeNull();
+  });
+});
+
+describe("getFormRelayHints", () => {
+  it("returns the embedded relays", () => {
+    const naddr = naddrEncode({
+      kind: FORM_KIND,
+      pubkey: SAMPLE_PUBKEY,
+      identifier: "x",
+      relays: ["wss://relay.example"],
+    });
+    expect(getFormRelayHints(naddr)).toEqual(["wss://relay.example"]);
+  });
+
+  it("returns empty array when no relays encoded", () => {
+    expect(getFormRelayHints(SAMPLE_NADDR)).toEqual([]);
+  });
+
+  it("returns empty array for invalid input", () => {
+    expect(getFormRelayHints("garbage")).toEqual([]);
   });
 });

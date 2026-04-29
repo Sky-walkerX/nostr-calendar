@@ -59,6 +59,8 @@ import { generateSecretKey } from "nostr-tools";
 import { bytesToHex } from "nostr-tools/utils";
 import { FormFillerDialog } from "./FormFillerDialog";
 import type { IFormAttachment } from "../utils/types";
+import { useFormSubmissionStatus } from "../hooks/useFormSubmissionStatus";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 
 interface CalendarEventCardProps {
   event: PositionedEvent;
@@ -487,33 +489,11 @@ export function CalendarEvent({ event }: CalendarEventViewProps) {
               </Typography>
               <Stack spacing={1}>
                 {event.forms.map((f, i) => (
-                  <Box
+                  <FormAttachmentRow
                     key={`${f.naddr}-${i}`}
-                    display="flex"
-                    alignItems="center"
-                    gap={1}
-                    flexWrap="wrap"
-                  >
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      onClick={() => setActiveForm(f)}
-                    >
-                      {intl.formatMessage({ id: "form.fillOut" })}
-                    </Button>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{
-                        fontFamily: "monospace",
-                        wordBreak: "break-all",
-                      }}
-                    >
-                      {f.naddr.length > 24
-                        ? `${f.naddr.slice(0, 12)}…${f.naddr.slice(-8)}`
-                        : f.naddr}
-                    </Typography>
-                  </Box>
+                    form={f}
+                    onFill={() => setActiveForm(f)}
+                  />
                 ))}
               </Stack>
               <Divider />
@@ -557,6 +537,42 @@ export function CalendarEvent({ event }: CalendarEventViewProps) {
         onClose={() => setActiveForm(null)}
         onSubmitted={() => setActiveForm(null)}
       />
+    </Box>
+  );
+}
+
+function FormAttachmentRow({
+  form,
+  onFill,
+}: {
+  form: IFormAttachment;
+  onFill: () => void;
+}) {
+  const intl = useIntl();
+  const { user } = useUser();
+  const { status } = useFormSubmissionStatus(form.naddr, user?.pubkey);
+  const submitted = status.state === "submitted";
+  return (
+    <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+      <Button
+        variant={submitted ? "text" : "outlined"}
+        size="small"
+        onClick={onFill}
+        startIcon={submitted ? <CheckCircleIcon color="success" /> : undefined}
+      >
+        {intl.formatMessage({
+          id: submitted ? "form.viewOrUpdate" : "form.fillOut",
+        })}
+      </Button>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ fontFamily: "monospace", wordBreak: "break-all" }}
+      >
+        {form.naddr.length > 24
+          ? `${form.naddr.slice(0, 12)}…${form.naddr.slice(-8)}`
+          : form.naddr}
+      </Typography>
     </Box>
   );
 }
