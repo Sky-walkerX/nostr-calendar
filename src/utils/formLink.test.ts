@@ -69,6 +69,41 @@ describe("extractResponseKey", () => {
     ).toBe("secret-123");
   });
 
+  it("reads ?viewKey query param (Formstr's legacy format)", () => {
+    expect(
+      extractResponseKey(
+        `https://formstr.app/f/${SAMPLE_NADDR}?viewKey=4425edf8b0c0ab84f47718452c6dd0fcfb6df2ec73ad868b31eefe0f18abc8f8`,
+      ),
+    ).toBe("4425edf8b0c0ab84f47718452c6dd0fcfb6df2ec73ad868b31eefe0f18abc8f8");
+  });
+
+  it("decodes #nkeys1 hash fragment to viewKey (Formstr's modern format)", async () => {
+    // Build a real nkeys blob using the SDK's encoder so the test
+    // round-trips through the same TLV path the SDK uses at runtime.
+    const { encodeNKeys } = await import(
+      "@formstr/sdk/dist/utils/nkeys.js"
+    );
+    const viewKeyHex =
+      "4425edf8b0c0ab84f47718452c6dd0fcfb6df2ec73ad868b31eefe0f18abc8f8";
+    const nkeys = encodeNKeys({ viewKey: viewKeyHex });
+    expect(
+      extractResponseKey(`https://formstr.app/f/${SAMPLE_NADDR}#${nkeys}`),
+    ).toBe(viewKeyHex);
+  });
+
+  it("prefers nkeys hash over query params when both are present", async () => {
+    const { encodeNKeys } = await import(
+      "@formstr/sdk/dist/utils/nkeys.js"
+    );
+    const hashKey = "a".repeat(64);
+    const nkeys = encodeNKeys({ viewKey: hashKey });
+    expect(
+      extractResponseKey(
+        `https://formstr.app/f/${SAMPLE_NADDR}?viewKey=should-be-ignored#${nkeys}`,
+      ),
+    ).toBe(hashKey);
+  });
+
   it("reads naddr/<key> path style", () => {
     expect(
       extractResponseKey(
@@ -111,9 +146,9 @@ describe("buildFormstrUrl", () => {
     );
   });
 
-  it("appends responseKey as query param", () => {
+  it("appends responseKey as ?viewKey= query param", () => {
     expect(buildFormstrUrl({ naddr: SAMPLE_NADDR, responseKey: "a/b" })).toBe(
-      `https://formstr.app/f/${SAMPLE_NADDR}?responseKey=a%2Fb`,
+      `https://formstr.app/f/${SAMPLE_NADDR}?viewKey=a%2Fb`,
     );
   });
 });
