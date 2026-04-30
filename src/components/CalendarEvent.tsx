@@ -412,6 +412,7 @@ export function CalendarEvent({ event }: CalendarEventViewProps) {
             kind: event.kind,
             authorPubkey: event.user,
             eventDTag: event.id,
+            relayUrl: event.relayHint ?? "",
             viewKey: event.viewKey,
           })
         : undefined);
@@ -662,6 +663,11 @@ function InvitationAcceptBar({ event }: { event: ICalendarEvent }) {
   const [creatingGuest, setCreatingGuest] = useState(false);
   const [errorOpen, setErrorOpen] = useState(false);
   const [successDialogOpen, setSuccessDialogOpen] = useState(false);
+  const [pendingFormAccept, setPendingFormAccept] = useState<{
+    calendarId: string;
+    giftWrapId?: string;
+    formIndex: number;
+  } | null>(null);
 
   // Sync selected calendar once calendars load (e.g. right after login)
   useEffect(() => {
@@ -678,39 +684,65 @@ function InvitationAcceptBar({ event }: { event: ICalendarEvent }) {
     }
   }, [user, calendarsLoaded, fetchCalendars]);
 
+  const finalizeAccept = async (calendarId: string, giftWrapId?: string) => {
+    if (giftWrapId) {
+      await acceptInvitation(giftWrapId, calendarId);
+    } else {
+      const eventRef = buildEventRef({
+        kind: event.kind,
+        authorPubkey: event.user,
+        eventDTag: event.id,
+        relayUrl: event.relayHint ?? "",
+        viewKey: event.viewKey || "",
+      });
+      await addEventToCalendar(calendarId, eventRef);
+      updateEvent({
+        ...event,
+        calendarId,
+        isInvitation: false,
+      });
+    }
+    setSuccessDialogOpen(true);
+  };
+
   const handleAccept = async () => {
     if (!selectedCalendarId) return;
     setAccepting(true);
     try {
-      // If there is a matching gift-wrap invitation in the store, use the full
-      // invitation flow so the record is removed from the notifications panel.
-      // Otherwise (shared-link context) build the event reference directly.
       const matchingInvitation = invitations.find(
         (inv) => inv.eventId === event.id && inv.pubkey === event.user,
       );
-      if (matchingInvitation) {
-        await acceptInvitation(
-          matchingInvitation.giftWrapId,
-          selectedCalendarId,
-        );
-      } else {
-        const eventRef = buildEventRef({
-          kind: event.kind,
-          authorPubkey: event.user,
-          eventDTag: event.id,
-          // Preserve the relay hint so re-fetching this event from the
-          // calendar list after a page reload actually finds it.
-          relayUrl: event.relayHint ?? "",
-          viewKey: event.viewKey || "",
-        });
-        await addEventToCalendar(selectedCalendarId, eventRef);
-        updateEvent({
-          ...event,
+      const forms = event.forms ?? [];
+      if (forms.length > 0) {
+        setPendingFormAccept({
           calendarId: selectedCalendarId,
-          isInvitation: false,
+          giftWrapId: matchingInvitation?.giftWrapId,
+          formIndex: 0,
         });
+        return;
       }
-      setSuccessDialogOpen(true);
+      await finalizeAccept(selectedCalendarId, matchingInvitation?.giftWrapId);
+    } catch {
+      setErrorOpen(true);
+    } finally {
+      setAccepting(false);
+    }
+  };
+
+  const advancePendingFormAccept = async () => {
+    if (!pendingFormAccept) return;
+    const forms = event.forms ?? [];
+    const next = pendingFormAccept.formIndex + 1;
+    if (next < forms.length) {
+      setPendingFormAccept({ ...pendingFormAccept, formIndex: next });
+      return;
+    }
+
+    const { calendarId, giftWrapId } = pendingFormAccept;
+    setPendingFormAccept(null);
+    setAccepting(true);
+    try {
+      await finalizeAccept(calendarId, giftWrapId);
     } catch {
       setErrorOpen(true);
     } finally {
@@ -737,6 +769,11 @@ function InvitationAcceptBar({ event }: { event: ICalendarEvent }) {
     const d = dayjs(event.begin);
     navigate(`/d/${d.year()}/${d.month() + 1}/${d.date()}`);
   };
+
+  const pendingForm = pendingFormAccept
+    ? (event.forms ?? [])[pendingFormAccept.formIndex]
+    : null;
+  const formCount = event.forms?.length ?? 0;
 
   // ── Login gate ─────────────────────────────────────────────────────────────
   if (!user) {
@@ -864,6 +901,19 @@ function InvitationAcceptBar({ event }: { event: ICalendarEvent }) {
           </Button>
         </Box>
       </Stack>
+
+      {pendingFormAccept && pendingForm && (
+        <FormFillerDialog
+          open
+          attachment={pendingForm}
+          index={pendingFormAccept.formIndex + 1}
+          total={formCount}
+          onClose={() => setPendingFormAccept(null)}
+          onSubmitted={() => {
+            void advancePendingFormAccept();
+          }}
+        />
+      )}
 
       <Snackbar
         open={errorOpen}
