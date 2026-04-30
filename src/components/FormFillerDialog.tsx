@@ -99,9 +99,14 @@ export function FormFillerDialog({
     try {
       if (!sdkRef.current) sdkRef.current = new FormstrSDK();
       const sdk = sdkRef.current;
-      const fetched = (await sdk.fetchForm(
-        attachment.naddr,
-        attachment.responseKey,
+      // Use the dedicated encrypted-form fetch path when a responseKey is
+      // present — the SDK's fetchFormWithViewKey encodes it into the nkeys
+      // payload that the decryption layer expects.  Passing the raw key to
+      // fetchForm causes "Could not decrypt form with supplied keys: undefined".
+      const fetched = (await (
+        attachment.responseKey
+          ? sdk.fetchFormWithViewKey(attachment.naddr, attachment.responseKey)
+          : sdk.fetchForm(attachment.naddr)
       )) as SdkForm;
       sdk.renderHtml(fetched as never);
       setForm(fetched);

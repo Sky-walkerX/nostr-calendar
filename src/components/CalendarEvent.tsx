@@ -466,7 +466,9 @@ export function CalendarEvent({ event }: CalendarEventViewProps) {
               <Typography variant="subtitle1">
                 {intl.formatMessage({ id: "navigation.description" })}
               </Typography>
-              <Typography variant="body2">
+              {/* component="div" avoids <p> nesting: Typography defaults to <p>
+                  but react-markdown also wraps paragraphs in <p> tags */}
+              <Typography component="div" variant="body2">
                 <Markdown remarkPlugins={[remarkGfm]}>
                   {event.description}
                 </Markdown>
@@ -696,6 +698,9 @@ function InvitationAcceptBar({ event }: { event: ICalendarEvent }) {
           kind: event.kind,
           authorPubkey: event.user,
           eventDTag: event.id,
+          // Preserve the relay hint so re-fetching this event from the
+          // calendar list after a page reload actually finds it.
+          relayUrl: event.relayHint ?? "",
           viewKey: event.viewKey || "",
         });
         await addEventToCalendar(selectedCalendarId, eventRef);

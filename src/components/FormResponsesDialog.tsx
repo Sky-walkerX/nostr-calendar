@@ -122,9 +122,12 @@ export function FormResponsesDialog({ open, attachment, onClose }: Props) {
     setResponses([]);
     try {
       const sdk = new FormstrSDK();
-      const fetchedForm = (await sdk.fetchForm(
-        attachment.naddr,
-        attachment.responseKey,
+      // Use the encrypted-form fetch path when a responseKey is present;
+      // passing the raw key to fetchForm causes a decrypt error.
+      const fetchedForm = (await (
+        attachment.responseKey
+          ? sdk.fetchFormWithViewKey(attachment.naddr, attachment.responseKey)
+          : sdk.fetchForm(attachment.naddr)
       )) as SdkForm;
       setForm(fetchedForm);
 
