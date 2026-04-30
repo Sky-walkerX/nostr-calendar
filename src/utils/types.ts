@@ -42,10 +42,9 @@ export type NotificationPreference = "enabled" | "disabled";
  *   ["form", naddr, responseKey?]
  *
  * The naddr is the Nostr address (NIP-19) of the form.
- * The optional responseKey is treated as opaque metadata in this phase —
- * its concrete meaning (submission key vs. response decryption key vs.
- * link-only key) is intentionally not interpreted here, so authoring
- * clients can round-trip it untouched until the protocol is settled.
+ * The optional responseKey stores Formstr's raw viewKey, extracted from
+ * `#nkeys1...` or `?viewKey=...` share URLs, and is passed to the SDK
+ * when fetching encrypted form templates.
  */
 export interface IFormAttachment {
   naddr: string;
