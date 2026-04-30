@@ -122,12 +122,27 @@ const dictionary: NestedObject = {
     form: {
       fillTitle: "Fill out form",
       fillOut: "Fill out",
+      viewOrUpdate: "View / update response",
+      submit: "Submit",
       cancel: "Cancel",
       submitting: "Submitting…",
       retry: "Retry",
       openExternal: "Open in Formstr",
       fetchError: "Could not load the form. Please try again.",
       submitError: "Could not submit your response. Please try again.",
+      alreadySubmitted: "You've already responded to this form.",
+      submitAgain: "Submit again",
+      continue: "Continue",
+    },
+    formResponses: {
+      viewButton: "View responses",
+      title: "Form responses",
+      empty: "No one has submitted this form yet.",
+      respondent: "Respondent",
+      submittedAt: "Submitted",
+      loadError: "Could not load form responses.",
+      encryptedNotice:
+        "This form is encrypted. Open it in Formstr to view responses.",
     },
     deleteEvent: {
       title: "Delete Event",
@@ -351,6 +366,8 @@ const dictionary: NestedObject = {
     form: {
       fillTitle: "Formular ausfüllen",
       fillOut: "Ausfüllen",
+      viewOrUpdate: "Antwort ansehen / aktualisieren",
+      submit: "Absenden",
       cancel: "Abbrechen",
       submitting: "Wird gesendet…",
       retry: "Erneut versuchen",
@@ -359,6 +376,19 @@ const dictionary: NestedObject = {
         "Das Formular konnte nicht geladen werden. Bitte versuchen Sie es erneut.",
       submitError:
         "Ihre Antwort konnte nicht gesendet werden. Bitte versuchen Sie es erneut.",
+      alreadySubmitted: "Sie haben dieses Formular bereits beantwortet.",
+      submitAgain: "Erneut absenden",
+      continue: "Weiter",
+    },
+    formResponses: {
+      viewButton: "Antworten ansehen",
+      title: "Formularantworten",
+      empty: "Noch hat niemand auf dieses Formular geantwortet.",
+      respondent: "Antwortende(r)",
+      submittedAt: "Gesendet",
+      loadError: "Antworten konnten nicht geladen werden.",
+      encryptedNotice:
+        "Dieses Formular ist verschlüsselt. Öffnen Sie es in Formstr, um die Antworten zu sehen.",
     },
     deleteEvent: {
       title: "Termin löschen",
