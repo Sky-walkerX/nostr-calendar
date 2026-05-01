@@ -38,7 +38,9 @@ function getDeviceEventRange(date: Dayjs, layout: Layout) {
 function Calendar() {
   const events = useTimeBasedEvents((state) => state);
   const calendars = useCalendarLists((state) => state.calendars);
-  const { invitations } = useInvitations();
+  const {invitations} = useInvitations();
+
+
   const { layout } = useLayout();
   const { date } = useDateWithRouting();
   const deviceInit = useDeviceCalendars((s) => s.init);

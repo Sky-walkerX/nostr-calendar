@@ -4,12 +4,14 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
+  FormControlLabel,
   IconButton,
   Link,
   Paper,
@@ -33,13 +35,14 @@ import ContentCopy from "@mui/icons-material/ContentCopy";
 import OpenInNew from "@mui/icons-material/OpenInNew";
 import Download from "@mui/icons-material/Download";
 import Edit from "@mui/icons-material/Edit";
+import FileCopy from "@mui/icons-material/FileCopy";
 import Delete from "@mui/icons-material/Delete";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
 import dayjs from "dayjs";
 import { exportICS, isMobile } from "../common/utils";
 import { encodeNAddr } from "../common/nostr";
-import { getEditEventPage, getEventPage } from "../utils/routingHelper";
+import { getDuplicateEventPage, getEditEventPage, getEventPage } from "../utils/routingHelper";
 import { useNavigate } from "react-router";
 import { getAppBaseUrl, isNative } from "../utils/platform";
 import { useNotifications } from "../stores/notifications";
@@ -56,6 +59,11 @@ import { DeleteEventDialog } from "./DeleteEventDialog";
 import { CalendarListSelect } from "./CalendarListSelect";
 
 import { useInvitations } from "../stores/invitations";
+import {
+  useBusyList,
+  getBusyListDefaultOptIn,
+  setBusyListDefaultOptIn,
+} from "../stores/busyList";
 import {
   buildEventRef,
   getCalendarEventCoordinate,
@@ -382,6 +390,24 @@ function ActionButtons({
     navigate(editLink);
   };
 
+  const duplicateEvent = () => {
+    const duplicateLink = getDuplicateEventPage(
+      encodeNAddr(
+        {
+          pubkey: event.user,
+          identifier: event.id,
+          kind: event.kind,
+        },
+        event.relayHint ? [event.relayHint] : undefined,
+      ),
+      event.viewKey,
+    );
+    closeModal();
+    navigate(duplicateLink);
+  };
+
+  const iconSize = isMobile ? "small" : "medium";
+
   return (
     <Box
       minWidth={isMobile ? "inherit" : "160px"}
@@ -408,6 +434,13 @@ function ActionButtons({
         <IconButton size={iconSize} onClick={() => exportICS(event)}>
           <Tooltip title={intl.formatMessage({ id: "event.downloadDetails" })}>
             <Download fontSize={iconSize} />
+          </Tooltip>
+        </IconButton>
+      )}
+      {isEditable && (
+        <IconButton size={iconSize} onClick={duplicateEvent}>
+          <Tooltip title={intl.formatMessage({ id: "event.duplicateEvent" })}>
+            <FileCopy fontSize={iconSize} />
           </Tooltip>
         </IconButton>
       )}
@@ -642,6 +675,9 @@ function InvitationAcceptBar({ event }: { event: ICalendarEvent }) {
     fetchCalendars,
   } = useCalendarLists();
   const { invitations, acceptInvitation } = useInvitations();
+  const [publishBusy, setPublishBusy] = useState<boolean>(() =>
+    getBusyListDefaultOptIn(),
+  );
   const { updateEvent } = useTimeBasedEvents();
   const [selectedCalendarId, setSelectedCalendarId] = useState(
     calendars[0]?.id || "",
@@ -694,6 +730,14 @@ function InvitationAcceptBar({ event }: { event: ICalendarEvent }) {
           calendarId: selectedCalendarId,
           isInvitation: false,
         });
+      }
+      // Persist the user's preference and (best-effort) publish a busy entry
+      // for the accepted slot.
+      setBusyListDefaultOptIn(publishBusy);
+      if (publishBusy) {
+        void useBusyList
+          .getState()
+          .addBusyRange({ start: event.begin, end: event.end });
       }
       setSuccessDialogOpen(true);
     } catch {
@@ -848,6 +892,20 @@ function InvitationAcceptBar({ event }: { event: ICalendarEvent }) {
             {intl.formatMessage({ id: "invitation.acceptInvitation" })}
           </Button>
         </Box>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={publishBusy}
+              onChange={(e) => setPublishBusy(e.target.checked)}
+              size="small"
+            />
+          }
+          label={
+            <Typography variant="body2">
+              {intl.formatMessage({ id: "busyList.publishToggle" })}
+            </Typography>
+          }
+        />
       </Stack>
 
       <Snackbar

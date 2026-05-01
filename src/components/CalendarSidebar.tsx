@@ -39,6 +39,8 @@ import { useIntl } from "react-intl";
 import { useTimeBasedEvents } from "../stores/events";
 import { useDeviceCalendars } from "../stores/deviceCalendars";
 import { deviceCalendarColor } from "../utils/deviceCalendarAdapter";
+import { useUser } from "../stores/user";
+import { SchedulingPagesList } from "./SchedulingPagesList";
 
 interface CalendarSidebarProps {
   onClose: () => void;
@@ -48,6 +50,7 @@ export function CalendarSidebar({ onClose }: CalendarSidebarProps) {
   const intl = useIntl();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const { user } = useUser();
   const {
     calendars,
     toggleVisibility,
@@ -213,6 +216,12 @@ export function CalendarSidebar({ onClose }: CalendarSidebarProps) {
       </Box>
 
       <DeviceCalendarsSection />
+      {/* Scheduling section — only visible to logged-in users */}
+      {user && (
+        <Box mt={3}>
+          <SchedulingPagesList onNavigate={onClose} />
+        </Box>
+      )}
 
       {manageDialogOpen && (
         <CalendarManageDialog

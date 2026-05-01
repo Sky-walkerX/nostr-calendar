@@ -31,6 +31,12 @@ import { useCalendarLists } from "../stores/calendarLists";
 import { buildEventRef } from "../utils/calendarListTypes";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
+import {
+  busyListToTags,
+  busyListDTag,
+  nostrEventToBusyList,
+} from "../utils/parser";
+import type { IBusyList } from "../utils/types";
 
 export const defaultRelays = [
   "wss://relay.damus.io/",
@@ -69,31 +75,26 @@ export const ensureRelay = async (
   return relay;
 };
 
-export async function publishPrivateRSVPEvent({
-  authorpubKey, // Public key of the event author
-  eventId, // The dtag of the event
-  status, // Status of the RSVP event
-  participants, // List of participant public keys
-  referenceKind,
-}: {
+export async function publishPrivateRSVPEvent(params: {
   eventId: string;
+  // Public key of the event author
   authorpubKey: string;
+  // RSVP status for the event
   status: string;
+  // List of participant public keys
   participants: string[];
   referenceKind: EventKinds.PrivateCalendarEvent;
 }) {
+  void params;
   // this function is noop
 }
 
-export async function publishPublicRSVPEvent({
-  authorpubKey,
-  eventId,
-  status,
-}: {
+export async function publishPublicRSVPEvent(params: {
   authorpubKey: string;
   eventId: string;
   status: string;
 }) {
+  void params;
   // this function is noop
 }
 
@@ -170,19 +171,34 @@ async function preparePrivateCalendarEvent(
   };
 }
 
-export async function publishPrivateCalendarEvent(event: ICalendarEvent) {
+export async function publishPrivateCalendarEvent(
+  event: ICalendarEvent,
+  onAcceptedRelays?: (url: string) => void,
+  onRelayComplete?: (url: string, success: boolean) => void,
+  /** Optional pre-generated d-tag (e.g. from a booking request) */
+  existingDTag?: string,
+) {
   const viewSecretKey = generateSecretKey();
-  const dTagRoot = `${JSON.stringify(event)}-${Date.now()}`;
-  const dTag = bytesToHex(sha256(utf8ToBytes(dTagRoot))).substring(0, 30);
+  const dTag =
+    existingDTag ||
+    bytesToHex(
+      sha256(utf8ToBytes(`${JSON.stringify(event)}-${Date.now()}`)),
+    ).substring(0, 30);
   const { signedEvent, eventKind, userPublicKey } =
     await preparePrivateCalendarEvent(event, dTag, viewSecretKey);
 
   // Capture which relay accepts the event to use as a hint in invitations
   // and the creator's calendar list entry, so recipients can fetch from there.
   let publishedRelayHint = "";
-  await publishToRelays(signedEvent, (url) => {
-    if (!publishedRelayHint) publishedRelayHint = url;
-  });
+  await publishToRelays(
+    signedEvent,
+    (url) => {
+      if (!publishedRelayHint) publishedRelayHint = url;
+      onAcceptedRelays?.(url);
+    },
+    undefined,
+    { waitForAll: true, onRelayComplete },
+  );
 
   // Gift-wrap the event keys to each participant (including the creator).
   // These serve as invitations — recipients will see them as notifications
@@ -238,19 +254,26 @@ export async function publishPrivateCalendarEvent(event: ICalendarEvent) {
     authorPubkey: userPublicKey,
     calendarEvent: signedEvent,
     giftWraps: giftWraps.map(({ giftWrap }) => giftWrap),
+    dTag,
+    viewKey: nip19.nsecEncode(viewSecretKey),
   };
 }
 
 export async function editPrivateCalendarEvent(
   event: ICalendarEvent,
   calendarId: string,
+  onAcceptedRelays?: (url: string) => void,
+  onRelayComplete?: (url: string, success: boolean) => void,
 ) {
   const dTag = event.id;
   const viewSecretKey = nip19.decode(event.viewKey as NSec).data;
   const { signedEvent, eventKind, userPublicKey } =
     await preparePrivateCalendarEvent(event, dTag, viewSecretKey);
 
-  await publishToRelays(signedEvent);
+  await publishToRelays(signedEvent, onAcceptedRelays, undefined, {
+    waitForAll: true,
+    onRelayComplete,
+  });
 
   const eventCoordinate = `${eventKind}:${userPublicKey}:${dTag}`;
   const eventRef = buildEventRef({
@@ -267,6 +290,7 @@ export async function editPrivateCalendarEvent(
   return {
     event,
     calendarId,
+    signedEvent,
   };
 }
 
@@ -502,34 +526,75 @@ export const publishToRelays = (
   event: Event,
   onAcceptedRelays: (url: string) => void = _onAcceptedRelays,
   relays?: string[],
+  options: {
+    waitForAll?: boolean;
+    onRelayComplete?: (url: string, success: boolean) => void;
+  } = {},
 ) => {
-  const relayList = (relays ?? getRelays()).map(normalizeURL);
-  return Promise.any(
-    relayList.map(async (url) => {
-      let relay: AbstractRelay | null = null;
-      try {
-        relay = await ensureRelay(url, { connectionTimeout: 5000 });
-        return await Promise.race<string>([
-          relay.publish(event).then((reason) => {
-            onAcceptedRelays(url);
-            return reason;
-          }),
-          new Promise<string>((_, reject) =>
-            setTimeout(() => reject("timeout"), 5000),
-          ),
-        ]);
-      } finally {
-        if (relay) {
-          try {
-            await relay.close();
-          } catch {
-            // Ignore closing errors
-          }
+  const { onRelayComplete } = options;
+  const relayList = Array.from(
+    new Set((relays ?? getRelays()).map(normalizeURL)),
+  );
+  const publishPromises = relayList.map(async (url) => {
+    let relay: AbstractRelay | null = null;
+    try {
+      relay = await ensureRelay(url, { connectionTimeout: 5000 });
+      const reason = await Promise.race<string>([
+        relay.publish(event).then((r) => {
+          onAcceptedRelays(url);
+          return r;
+        }),
+        new Promise<string>((_, reject) =>
+          setTimeout(() => reject("timeout"), 5000),
+        ),
+      ]);
+      onRelayComplete?.(url, true);
+      return reason;
+    } catch (e) {
+      onRelayComplete?.(url, false);
+      throw e;
+    } finally {
+      if (relay) {
+        try {
+          await relay.close();
+        } catch {
+          // Ignore closing errors
         }
       }
-    }),
-  );
+    }
+  });
+
+  if (options.waitForAll) {
+    return Promise.allSettled(publishPromises).then((results) => {
+      if (results.some((result) => result.status === "fulfilled")) {
+        return results;
+      }
+
+      const rejectionReasons = results.flatMap((result) =>
+        result.status === "rejected" ? [result.reason] : [],
+      );
+
+      throw new AggregateError(
+        rejectionReasons,
+        "No relays accepted the event",
+      );
+    });
+  }
+
+  return Promise.any(publishPromises);
 };
+
+/** Re-publish a signed event to a subset of relays (e.g. retry after partial failure). */
+export const republishEventToRelays = (
+  event: Event,
+  relayUrls: string[],
+  onAcceptedRelays?: (url: string) => void,
+  onRelayComplete?: (url: string, success: boolean) => void,
+) =>
+  publishToRelays(event, onAcceptedRelays ?? (() => {}), relayUrls, {
+    waitForAll: true,
+    onRelayComplete,
+  });
 
 export const fetchCalendarEvents = (
   { since, until }: { since?: number; until?: number },
@@ -552,6 +617,7 @@ export const fetchCalendarEvents = (
 export const publishPublicCalendarEvent = async (
   event: ICalendarEvent,
   onAcceptedRelays?: (url: string) => void,
+  onRelayComplete?: (url: string, success: boolean) => void,
 ) => {
   const pubKey = await getUserPublicKey();
   const id = event?.id !== TEMP_CALENDAR_ID ? event.id : uuid();
@@ -586,9 +652,12 @@ export const publishPublicCalendarEvent = async (
   const signer = await signerManager.getSigner();
   const fullEvent = await signer.signEvent(baseEvent);
   fullEvent.id = getEventHash(baseEvent);
-  const result = await publishToRelays(fullEvent, onAcceptedRelays);
+  const result = await publishToRelays(fullEvent, onAcceptedRelays, undefined, {
+    waitForAll: true,
+    onRelayComplete,
+  });
 
-  return { result, id, pubKey };
+  return { result, id, pubKey, signedEvent: fullEvent };
 };
 
 /**
@@ -777,3 +846,175 @@ export const publishRelayList = async (relays: string[]): Promise<void> => {
   const allRelays = [...new Set([...relays, ...defaultRelays])];
   await publishToRelays(fullEvent, () => {}, allRelays);
 };
+
+// --- Public Busy List (kind 31926) ---
+
+/**
+ * Publishes a public busy list event (kind 31926) for one calendar month.
+ * Replaces any prior version (parameterized-replaceable per `(pubkey, d)`).
+ */
+export async function publishBusyList(list: IBusyList): Promise<Event> {
+  const pubKey = await getUserPublicKey();
+  const baseEvent: UnsignedEvent = {
+    kind: EventKinds.PublicBusyList,
+    pubkey: pubKey,
+    tags: busyListToTags(list),
+    content: "",
+    created_at: Math.floor(Date.now() / 1000),
+  };
+  const signer = await signerManager.getSigner();
+  const signedEvent = await signer.signEvent(baseEvent);
+  signedEvent.id = getEventHash(baseEvent);
+  await publishToRelays(signedEvent);
+  nostrRuntime.addEvent(signedEvent);
+  return signedEvent;
+}
+
+/**
+ * Fetches a user's public busy lists for the given month partition keys.
+ * Returns one IBusyList per month found (skipped silently if absent).
+ */
+export async function fetchBusyListsForUser(
+  pubkey: string,
+  monthKeys: string[],
+): Promise<IBusyList[]> {
+  if (monthKeys.length === 0) return [];
+  const filter: Filter = {
+    kinds: [EventKinds.PublicBusyList],
+    authors: [pubkey],
+    "#d": monthKeys.map(busyListDTag),
+  };
+  const events = await nostrRuntime.querySync(getRelays(), filter);
+  const lists: IBusyList[] = [];
+  for (const event of events) {
+    const list = nostrEventToBusyList(event);
+    if (list) lists.push(list);
+  }
+  return lists;
+}
+
+// --- Scheduling Pages List (kind 32680) ---
+
+/**
+ * Encrypted payload schema for kind 32680 events. The shape is versioned
+ * so we can extend the schema without rotating the kind.
+ */
+interface SchedulingPageKeyPayload {
+  v: 1;
+  /** NIP-19 nsec encoding of the scheduling page's viewKey. */
+  viewKey: string;
+  /** d-tag of the scheduling page. */
+  dTag: string;
+  /** Unix-seconds timestamp of when the key was published. */
+  createdAt: number;
+}
+
+/**
+ * Publishes a self-encrypted kind-32680 event recording `viewKey` for one
+ * scheduling page the current user authored. Replaces any prior version
+ * (parameterized-replaceable per `(pubkey, page d-tag)`).
+ *
+ * `content === ""` is reserved for tombstones; callers wishing to revoke
+ * a key should publish an empty payload via `publishEmptySchedulingPageKey`.
+ */
+export async function publishSchedulingPageKey(params: {
+  dTag: string;
+  viewKeyNsec: string;
+}): Promise<Event> {
+  const userPubkey = await getUserPublicKey();
+  const signer = await signerManager.getSigner();
+  if (!signer.nip44Encrypt) {
+    throw new Error(
+      "publishSchedulingPageKey requires a NIP-44-capable signer (none available)",
+    );
+  }
+  const payload: SchedulingPageKeyPayload = {
+    v: 1,
+    viewKey: params.viewKeyNsec,
+    dTag: params.dTag,
+    createdAt: Math.floor(Date.now() / 1000),
+  };
+  const encrypted = await signer.nip44Encrypt(
+    userPubkey,
+    JSON.stringify(payload),
+  );
+  const baseEvent: UnsignedEvent = {
+    kind: EventKinds.SchedulingPagesList,
+    pubkey: userPubkey,
+    tags: [["d", params.dTag]],
+    content: encrypted,
+    created_at: payload.createdAt,
+  };
+  const signedEvent = await signer.signEvent(baseEvent);
+  signedEvent.id = getEventHash(baseEvent);
+  await publishToRelays(signedEvent);
+  nostrRuntime.addEvent(signedEvent);
+  return signedEvent;
+}
+
+/**
+ * Publishes a tombstone (empty-content) kind-32680 event for the given
+ * d-tag. Used when the creator deletes the underlying scheduling page.
+ */
+export async function publishEmptySchedulingPageKey(
+  dTag: string,
+): Promise<Event> {
+  const userPubkey = await getUserPublicKey();
+  const signer = await signerManager.getSigner();
+  const baseEvent: UnsignedEvent = {
+    kind: EventKinds.SchedulingPagesList,
+    pubkey: userPubkey,
+    tags: [["d", dTag]],
+    content: "",
+    created_at: Math.floor(Date.now() / 1000),
+  };
+  const signedEvent = await signer.signEvent(baseEvent);
+  signedEvent.id = getEventHash(baseEvent);
+  await publishToRelays(signedEvent);
+  nostrRuntime.addEvent(signedEvent);
+  return signedEvent;
+}
+
+/**
+ * Fetches all kind-32680 scheduling-page-key events for the current user
+ * and decrypts them. Returns a `Map<dTag, viewKeyNsec>`. Tombstones (empty
+ * content) and entries the signer cannot decrypt are skipped.
+ */
+export async function fetchOwnSchedulingPageKeys(): Promise<
+  Map<string, string>
+> {
+  const userPubkey = await getUserPublicKey();
+  const filter: Filter = {
+    kinds: [EventKinds.SchedulingPagesList],
+    authors: [userPubkey],
+  };
+  const events = await nostrRuntime.querySync(getRelays(), filter);
+  const signer = await signerManager.getSigner();
+  if (!signer.nip44Decrypt) return new Map();
+
+  const result = new Map<string, string>();
+  for (const event of events) {
+    const dTag = event.tags.find((t) => t[0] === "d")?.[1];
+    if (!dTag) continue;
+    if (!event.content) continue; // tombstone
+    try {
+      const decrypted = await signer.nip44Decrypt(userPubkey, event.content);
+      const payload = JSON.parse(
+        decrypted,
+      ) as Partial<SchedulingPageKeyPayload>;
+      if (
+        payload &&
+        typeof payload.viewKey === "string" &&
+        payload.dTag === dTag
+      ) {
+        result.set(dTag, payload.viewKey);
+      }
+    } catch (err) {
+      console.warn(
+        `Failed to decrypt scheduling page key for d=${dTag}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+  return result;
+}

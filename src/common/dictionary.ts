@@ -64,6 +64,7 @@ const dictionary: NestedObject = {
     },
     event: {
       editEvent: "Edit Event",
+      duplicateEvent: "Duplicate Event",
       deleteEvent: "Delete Event",
       createNewEvent: "Create New Event",
       enterTitle: "Enter event title",
@@ -94,6 +95,19 @@ const dictionary: NestedObject = {
       private: "Private",
       public: "Public",
       publishingToRelays: "Publishing to {count} relay(s)",
+      publishingEvent: "Publishing Event",
+      relaysPublishStatus: "Relays{complete}",
+      eventSaved: "Your event has been saved",
+      noRelaysAccepted:
+        "No relays accepted the event. Please check your relay configuration and try again.",
+      relayDetails: "Details",
+      relayPartialFailure:
+        "Some relays did not accept the event. You can try again for failed relays only.",
+      retryFailedRelays: "Retry failed relays",
+      closeEditor: "Close",
+      note: "Note",
+      partialPublishHint:
+        "The event is on your calendar. Retry to publish to relays that did not accept.",
       saving: "Saving...",
       saveEvent: "Save Event",
       copyLink: "Copy link to this event",
@@ -149,6 +163,11 @@ const dictionary: NestedObject = {
       addToCalendar: "Add to Calendar",
       selectCalendar: "Select Calendar",
       addNewCalendar: "Add new calendar",
+    },
+    busyList: {
+      publishToggle: "Show this time as busy on my public availability",
+      helperText:
+        "Publishes a public busy entry so others booking with you can see this slot is taken. The entry contains only start/end times — no event details.",
     },
     invitation: {
       invitations: "Invitations",
@@ -210,6 +229,84 @@ const dictionary: NestedObject = {
       copied: "Copied!",
       author: "Organiser",
     },
+    scheduling: {
+      createSchedulingPage: "Create Scheduling Page",
+      editSchedulingPage: "Edit Scheduling Page",
+      schedulingPages: "Scheduling",
+      noSchedulingPages: "No scheduling pages",
+      createPage: "Create Page",
+      viewBookings: "View Bookings",
+      bookings: "Bookings",
+      incoming: "Incoming",
+      sent: "Sent",
+      newPage: "New Page",
+      pending: "Pending",
+      history: "History",
+      approve: "Approve",
+      decline: "Decline",
+      approveBooking: "Approve Booking",
+      declineBooking: "Decline Booking",
+      approving: "Approving...",
+      declining: "Declining...",
+      reasonOptional: "Reason (optional)",
+      addToCalendar: "Add to calendar",
+      createsPrivateEvent:
+        "This will create a private calendar event and notify the booker.",
+      noPendingRequests:
+        "No booking requests yet. Share your scheduling page link to start receiving requests.",
+      noSentBookings:
+        "No sent booking requests yet. Book an appointment using someone's scheduling page link.",
+      confirmBooking: "Confirm Booking",
+      requestBooking: "Request Booking",
+      sending: "Sending...",
+      bookingRequestSent:
+        "Booking request sent! You'll be notified when it's approved.",
+      selectDuration: "Select duration",
+      noSlotsThisWeek:
+        "No available slots this week. Try navigating to a different week.",
+      eventTitle: "Event Title",
+      eventTitleHelp: "Title for calendar events created from bookings",
+      eventTitlePlaceholder: "e.g., Meeting with {name}",
+      basicInformation: "Basic Information",
+      appointmentDuration: "Appointment Duration",
+      fixedDuration: "Fixed duration options",
+      freeDuration: "Booker picks any duration",
+      weeklyAvailability: "Weekly Availability",
+      additionalDateWindows: "Additional Date Windows",
+      additionalDateWindowsHelp:
+        "Use this for one-off availability outside your weekly schedule.",
+      noAdditionalWindows: "No additional date windows.",
+      addDate: "Add Date",
+      blockedDates: "Blocked Dates",
+      blockedDatesHelp:
+        "Block specific dates to override your weekly availability.",
+      addBlockedDate: "Add blocked date",
+      settings: "Settings",
+      timezone: "Timezone",
+      timezoneHelp: "Auto-detected from your browser",
+      minimumNotice: "Minimum Notice",
+      maxAdvanceBooking: "Maximum Advance Booking",
+      bufferBetween: "Buffer Between Appointments",
+      requestExpiry: "Request Expiry",
+      saving: "Saving...",
+      updatePage: "Update Page",
+      pageCreated: "Scheduling page created!",
+      pageUpdated: "Scheduling page updated!",
+      shareLinkMessage:
+        "Your scheduling page is live! Share the link for others to book appointments.",
+      linkCopied: "Link copied to clipboard!",
+      privatePage: "Private scheduling page",
+      pageNotFound: "Scheduling page not found. It may have been deleted.",
+      loadError:
+        "Could not load scheduling page. It may have been deleted or is temporarily unavailable.",
+      publicPagesUnsupported:
+        "This scheduling page link is missing its access key. Public scheduling pages are no longer supported \u2014 please ask the host for an updated link.",
+      customDuration: "Custom (min)",
+      customDurationPlaceholder: "e.g. 45",
+      openLink: "Open link",
+      copyLink: "Copy link",
+      noBlockedDates: "No blocked dates. Add dates to block them from booking.",
+    },
   },
   "de-DE": {
     rsvp: {
@@ -270,9 +367,13 @@ const dictionary: NestedObject = {
     },
     startup: {
       fetchingEvents: "Ihre Kalenderlisten und Termine abrufen...",
+      noLogin: "Keine gespeicherte Anmeldung gefunden.",
+      error:
+        "Ihre Daten konnten nicht geladen werden. Überprüfen Sie Ihre Verbindung.",
     },
     event: {
       editEvent: "Termin bearbeiten",
+      duplicateEvent: "Termin duplizieren",
       deleteEvent: "Termin löschen",
       createNewEvent: "Neuen Termin erstellen",
       enterTitle: "Titel eingeben",
@@ -303,6 +404,19 @@ const dictionary: NestedObject = {
       private: "Privat",
       public: "Öffentlich",
       publishingToRelays: "Veröffentlichung an {count} Relay(s)",
+      publishingEvent: "Termin veröffentlichen",
+      relaysPublishStatus: "Relays{complete}",
+      eventSaved: "Ihr Termin wurde gespeichert",
+      noRelaysAccepted:
+        "Kein Relay hat den Termin akzeptiert. Bitte überprüfen Sie Ihre Relay-Konfiguration und versuchen Sie es erneut.",
+      relayDetails: "Details",
+      relayPartialFailure:
+        "Einige Relays haben den Termin nicht akzeptiert. Sie können nur fehlgeschlagene Relays erneut versuchen.",
+      retryFailedRelays: "Fehlgeschlagene Relays erneut senden",
+      closeEditor: "Schließen",
+      note: "Hinweis",
+      partialPublishHint:
+        "Der Termin ist in Ihrem Kalender. Wiederholen, um an Relays zu senden, die nicht angenommen haben.",
       saving: "Speichern...",
       saveEvent: "Termin speichern",
       copyLink: "Link zu diesem Termin kopieren",
@@ -359,6 +473,12 @@ const dictionary: NestedObject = {
       addToCalendar: "Zum Kalender hinzufügen",
       selectCalendar: "Kalender auswählen",
       addNewCalendar: "Neuen Kalender hinzufügen",
+    },
+    busyList: {
+      publishToggle:
+        "Diese Zeit in meiner öffentlichen Verfügbarkeit als belegt anzeigen",
+      helperText:
+        "Veröffentlicht einen öffentlichen Belegt-Eintrag, sodass andere, die mit Ihnen einen Termin buchen, sehen können, dass dieser Zeitraum vergeben ist. Der Eintrag enthält ausschließlich Start- und Endzeit – keine Termindetails.",
     },
     invitation: {
       invitations: "Einladungen",
@@ -420,6 +540,86 @@ const dictionary: NestedObject = {
       clickToCopy: "Klicken zum Kopieren",
       copied: "Kopiert!",
       author: "Organisator",
+    },
+    scheduling: {
+      createSchedulingPage: "Terminseite erstellen",
+      editSchedulingPage: "Terminseite bearbeiten",
+      schedulingPages: "Terminplanung",
+      noSchedulingPages: "Keine Terminseiten",
+      createPage: "Seite erstellen",
+      viewBookings: "Buchungen anzeigen",
+      bookings: "Buchungen",
+      incoming: "Eingehend",
+      sent: "Gesendet",
+      newPage: "Neue Seite",
+      pending: "Ausstehend",
+      history: "Verlauf",
+      approve: "Genehmigen",
+      decline: "Ablehnen",
+      approveBooking: "Buchung genehmigen",
+      declineBooking: "Buchung ablehnen",
+      approving: "Wird genehmigt...",
+      declining: "Wird abgelehnt...",
+      reasonOptional: "Grund (optional)",
+      addToCalendar: "Zum Kalender hinzufügen",
+      createsPrivateEvent:
+        "Dies erstellt einen privaten Kalendereintrag und benachrichtigt den Bucher.",
+      noPendingRequests:
+        "Noch keine Buchungsanfragen. Teilen Sie den Link Ihrer Terminseite, um Anfragen zu erhalten.",
+      noSentBookings:
+        "Noch keine gesendeten Buchungsanfragen. Buchen Sie einen Termin über den Terminseiten-Link einer anderen Person.",
+      confirmBooking: "Buchung bestätigen",
+      requestBooking: "Buchung anfragen",
+      sending: "Wird gesendet...",
+      bookingRequestSent:
+        "Buchungsanfrage gesendet! Sie werden benachrichtigt, sobald sie genehmigt wird.",
+      selectDuration: "Dauer auswählen",
+      noSlotsThisWeek:
+        "Keine verfügbaren Zeitfenster diese Woche. Versuchen Sie eine andere Woche.",
+      eventTitle: "Ereignistitel",
+      eventTitleHelp:
+        "Titel für Kalendereinträge, die aus Buchungen erstellt werden",
+      eventTitlePlaceholder: "z.B. Besprechung mit {name}",
+      basicInformation: "Grundinformationen",
+      appointmentDuration: "Termindauer",
+      fixedDuration: "Feste Daueroptionen",
+      freeDuration: "Bucher wählt beliebige Dauer",
+      weeklyAvailability: "Wöchentliche Verfügbarkeit",
+      additionalDateWindows: "Zusätzliche Zeitfenster",
+      additionalDateWindowsHelp:
+        "Verwenden Sie dies für einmalige Verfügbarkeit außerhalb Ihres Wochenplans.",
+      noAdditionalWindows: "Keine zusätzlichen Zeitfenster.",
+      addDate: "Datum hinzufügen",
+      blockedDates: "Gesperrte Tage",
+      blockedDatesHelp:
+        "Sperren Sie bestimmte Tage, um Ihre wöchentliche Verfügbarkeit zu überschreiben.",
+      addBlockedDate: "Gesperrten Tag hinzufügen",
+      settings: "Einstellungen",
+      timezone: "Zeitzone",
+      timezoneHelp: "Automatisch vom Browser erkannt",
+      minimumNotice: "Mindestvorlaufzeit",
+      maxAdvanceBooking: "Maximaler Buchungszeitraum",
+      bufferBetween: "Puffer zwischen Terminen",
+      requestExpiry: "Ablauf der Anfrage",
+      saving: "Wird gespeichert...",
+      updatePage: "Seite aktualisieren",
+      pageCreated: "Terminseite erstellt!",
+      pageUpdated: "Terminseite aktualisiert!",
+      shareLinkMessage:
+        "Ihre Terminseite ist live! Teilen Sie den Link, damit andere Termine buchen können.",
+      linkCopied: "Link in die Zwischenablage kopiert!",
+      privatePage: "Private Terminseite",
+      pageNotFound:
+        "Terminseite nicht gefunden. Sie wurde möglicherweise gelöscht.",
+      loadError:
+        "Terminseite konnte nicht geladen werden. Sie wurde möglicherweise gelöscht oder ist vorübergehend nicht verfügbar.",
+      publicPagesUnsupported:
+        "Diesem Link zur Terminseite fehlt der Zugriffsschlüssel. Öffentliche Terminseiten werden nicht mehr unterstützt – bitte fordern Sie einen aktualisierten Link beim Gastgeber an.",
+      customDuration: "Benutzerdefiniert (Min.)",
+      customDurationPlaceholder: "z.B. 45",
+      openLink: "Link öffnen",
+      copyLink: "Link kopieren",
+      noBlockedDates: "Keine gesperrten Tage. Fügen Sie Tage hinzu, um sie für Buchungen zu sperren.",
     },
   },
 };
