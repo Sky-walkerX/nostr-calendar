@@ -406,8 +406,6 @@ function ActionButtons({
     navigate(duplicateLink);
   };
 
-  const iconSize = isMobile ? "small" : "medium";
-
   return (
     <Box
       minWidth={isMobile ? "inherit" : "160px"}
