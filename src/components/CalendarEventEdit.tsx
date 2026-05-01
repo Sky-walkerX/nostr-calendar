@@ -444,11 +444,12 @@ export function CalendarEventEdit({
           const { eventRef, authorPubkey } =
             await publishPrivateCalendarEvent(eventToSave);
           await addEventToCalendar(selectedCalendarId, eventRef);
-          const { eventDTag, viewKey } = parseEventRef(eventRef);
+          const { eventDTag, relayUrl, viewKey } = parseEventRef(eventRef);
           useTimeBasedEvents.getState().addEvent({
             ...eventToSave,
             id: eventDTag,
             viewKey,
+            relayHint: relayUrl,
             user: authorPubkey,
             calendarId: selectedCalendarId,
           });

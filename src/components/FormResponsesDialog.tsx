@@ -70,6 +70,7 @@ type SdkForm = {
 type Props = {
   open: boolean;
   attachment: IFormAttachment | null;
+  candidatePubkeys?: string[];
   onClose: () => void;
 };
 
@@ -104,7 +105,12 @@ function parseResponse(
   return result;
 }
 
-export function FormResponsesDialog({ open, attachment, onClose }: Props) {
+export function FormResponsesDialog({
+  open,
+  attachment,
+  candidatePubkeys = [],
+  onClose,
+}: Props) {
   const intl = useIntl();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -124,11 +130,9 @@ export function FormResponsesDialog({ open, attachment, onClose }: Props) {
       const sdk = new FormstrSDK();
       // Use the encrypted-form fetch path when a responseKey is present;
       // passing the raw key to fetchForm causes a decrypt error.
-      const fetchedForm = (await (
-        attachment.responseKey
-          ? sdk.fetchFormWithViewKey(attachment.naddr, attachment.responseKey)
-          : sdk.fetchForm(attachment.naddr)
-      )) as SdkForm;
+      const fetchedForm = (await (attachment.responseKey
+        ? sdk.fetchFormWithViewKey(attachment.naddr, attachment.responseKey)
+        : sdk.fetchForm(attachment.naddr))) as SdkForm;
       setForm(fetchedForm);
 
       const coord = getFormCoordinate(attachment.naddr);
@@ -136,6 +140,7 @@ export function FormResponsesDialog({ open, attachment, onClose }: Props) {
       const events = await fetchFormResponses(
         coord,
         getFormRelayHints(attachment.naddr),
+        candidatePubkeys,
       );
       setResponses(events);
     } catch (err) {
@@ -148,7 +153,7 @@ export function FormResponsesDialog({ open, attachment, onClose }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [attachment, intl]);
+  }, [attachment, candidatePubkeys, intl]);
 
   useEffect(() => {
     if (open && attachment) load();
