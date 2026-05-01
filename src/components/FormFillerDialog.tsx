@@ -105,11 +105,9 @@ export function FormFillerDialog({
     try {
       if (!sdkRef.current) sdkRef.current = new FormstrSDK();
       const sdk = sdkRef.current;
-      const fetched = (await (
-        attachment.responseKey
-          ? sdk.fetchFormWithViewKey(attachment.naddr, attachment.responseKey)
-          : sdk.fetchForm(attachment.naddr)
-      )) as SdkForm;
+      const fetched = (await (attachment.responseKey
+        ? sdk.fetchFormWithViewKey(attachment.naddr, attachment.responseKey)
+        : sdk.fetchForm(attachment.naddr))) as SdkForm;
       sdk.renderHtml(fetched as never);
       setForm(fetched);
     } catch (err) {
@@ -228,7 +226,10 @@ export function FormFillerDialog({
 
         {alreadySubmitted && !resubmitting && !loading && (
           <Stack spacing={2}>
-            <Alert icon={<CheckCircleIcon fontSize="inherit" />} severity="success">
+            <Alert
+              icon={<CheckCircleIcon fontSize="inherit" />}
+              severity="success"
+            >
               {intl.formatMessage({ id: "form.alreadySubmitted" })}
             </Alert>
             <Stack direction="row" spacing={1}>
@@ -301,7 +302,11 @@ export function FormFillerDialog({
             href={buildFormstrUrl(attachment)}
             target="_blank"
             rel="noopener noreferrer"
-            sx={{ textTransform: "none", color: "text.secondary", flexShrink: 0 }}
+            sx={{
+              textTransform: "none",
+              color: "text.secondary",
+              flexShrink: 0,
+            }}
           >
             {intl.formatMessage({ id: "form.openExternal" })}
           </Button>
