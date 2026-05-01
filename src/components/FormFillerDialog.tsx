@@ -35,8 +35,11 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
+import type { Theme } from "@mui/material/styles";
+import { alpha } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { FormstrSDK } from "@formstr/sdk";
 import type { Event as NostrEvent, EventTemplate } from "nostr-tools";
 import { useIntl } from "react-intl";
@@ -44,6 +47,7 @@ import type { IFormAttachment } from "../utils/types";
 import { signerManager } from "../common/signer";
 import { useFormSubmissionStatus } from "../hooks/useFormSubmissionStatus";
 import { useUser } from "../stores/user";
+import { buildFormstrUrl } from "../utils/formLink";
 
 // SDK's NormalizedForm shape (subset we touch)
 type SdkForm = {
@@ -76,6 +80,8 @@ export function FormFillerDialog({
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sdkRef = useRef<FormstrSDK | null>(null);
+  // Stored by the form-setup effect so DialogActions can trigger submit.
+  const submitFnRef = useRef<(() => void) | null>(null);
   const { user } = useUser();
   const { status, markSubmitted } = useFormSubmissionStatus(
     open ? attachment?.naddr : undefined,
@@ -99,10 +105,6 @@ export function FormFillerDialog({
     try {
       if (!sdkRef.current) sdkRef.current = new FormstrSDK();
       const sdk = sdkRef.current;
-      // Use the dedicated encrypted-form fetch path when a responseKey is
-      // present — the SDK's fetchFormWithViewKey encodes it into the nkeys
-      // payload that the decryption layer expects.  Passing the raw key to
-      // fetchForm causes "Could not decrypt form with supplied keys: undefined".
       const fetched = (await (
         attachment.responseKey
           ? sdk.fetchFormWithViewKey(attachment.naddr, attachment.responseKey)
@@ -122,9 +124,7 @@ export function FormFillerDialog({
     }
   }, [attachment, intl]);
 
-  // Fetch the form template only when we should render it: caller opened
-  // the dialog AND the user has not already submitted (or has explicitly
-  // chosen to resubmit).
+  // Fetch the form template only when we should render it.
   useEffect(() => {
     const shouldRender =
       open &&
@@ -138,10 +138,12 @@ export function FormFillerDialog({
       setFetchError(null);
       setSubmitError(null);
       setResubmitting(false);
+      submitFnRef.current = null;
     }
   }, [open, attachment, fetchForm, status.state, resubmitting]);
 
-  // After form HTML is in the DOM, attach the SDK submit listener
+  // After form HTML is in the DOM, attach the SDK submit listener and wire
+  // submitFnRef so the DialogActions Submit button can trigger it.
   useEffect(() => {
     if (!form || !sdkRef.current || !containerRef.current) return;
     const sdk = sdkRef.current;
@@ -168,11 +170,13 @@ export function FormFillerDialog({
       },
     });
 
-    // Mark "submitting" when the rendered <form> is submitted, so the user
-    // gets feedback while the SDK signs + publishes.
     const root = containerRef.current;
     const formEl = root.querySelector("form");
     if (!formEl) return;
+
+    // Wire the external submit button.
+    submitFnRef.current = () => formEl.requestSubmit();
+
     const onSubmitDom = () => {
       setSubmitting(true);
       setSubmitError(null);
@@ -183,13 +187,16 @@ export function FormFillerDialog({
     };
   }, [form, intl, onSubmitted, markSubmitted]);
 
+  const showForm =
+    !loading && !fetchError && form && !(alreadySubmitted && !resubmitting);
+
   return (
     <Dialog
       open={open}
       onClose={submitting ? undefined : onClose}
       fullScreen={isMobile}
       fullWidth
-      maxWidth="md"
+      maxWidth="sm"
     >
       <DialogTitle sx={{ pr: 6 }}>
         <Stack direction="row" alignItems="center" spacing={1}>
@@ -212,20 +219,16 @@ export function FormFillerDialog({
         </IconButton>
       </DialogTitle>
 
-      <DialogContent dividers>
+      <DialogContent dividers sx={{ px: { xs: 2, sm: 3 }, py: 3 }}>
         {(status.state === "loading" || loading) && (
-          <Box display="flex" justifyContent="center" py={4}>
+          <Box display="flex" justifyContent="center" py={6}>
             <CircularProgress />
           </Box>
         )}
 
         {alreadySubmitted && !resubmitting && !loading && (
-          <Stack spacing={2} alignItems="flex-start">
-            <Alert
-              icon={<CheckCircleIcon fontSize="inherit" />}
-              severity="success"
-              sx={{ width: "100%" }}
-            >
+          <Stack spacing={2}>
+            <Alert icon={<CheckCircleIcon fontSize="inherit" />} severity="success">
               {intl.formatMessage({ id: "form.alreadySubmitted" })}
             </Alert>
             <Stack direction="row" spacing={1}>
@@ -249,64 +252,181 @@ export function FormFillerDialog({
         )}
 
         {fetchError && !loading && (
-          <Stack spacing={2} alignItems="flex-start">
-            <Alert severity="error" sx={{ width: "100%" }}>
-              {fetchError}
-            </Alert>
-            <Button variant="outlined" onClick={fetchForm}>
+          <Stack spacing={2}>
+            <Alert severity="error">{fetchError}</Alert>
+            <Button
+              variant="outlined"
+              onClick={fetchForm}
+              sx={{ alignSelf: "flex-start" }}
+            >
               {intl.formatMessage({ id: "form.retry" })}
             </Button>
-            {attachment && (
-              <Button
-                variant="text"
-                href={`https://formstr.app/f/${encodeURIComponent(
-                  attachment.naddr,
-                )}${
-                  attachment.responseKey
-                    ? `?responseKey=${encodeURIComponent(attachment.responseKey)}`
-                    : ""
-                }`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {intl.formatMessage({ id: "form.openExternal" })}
-              </Button>
-            )}
           </Stack>
         )}
 
-        {!loading &&
-          !fetchError &&
-          form &&
-          !(alreadySubmitted && !resubmitting) && (
-            <>
-              {submitError && (
-                <Alert severity="error" sx={{ mb: 2 }}>
-                  {submitError}
-                </Alert>
-              )}
-              {/* SDK-generated HTML. Source is a trusted Nostr form template. */}
-              <div
-                ref={containerRef}
-                dangerouslySetInnerHTML={{ __html: form.html?.form ?? "" }}
-              />
-            </>
-          )}
+        {showForm && (
+          <>
+            {submitError && (
+              <Alert severity="error" sx={{ mb: 2.5 }}>
+                {submitError}
+              </Alert>
+            )}
+            {/* SDK-generated HTML styled via scoped sx. Source is a trusted
+                Nostr form template. The SDK's own h2 and submit button are
+                hidden — we render them in the dialog chrome instead. */}
+            <Box
+              ref={containerRef}
+              sx={buildFormSx(theme)}
+              dangerouslySetInnerHTML={{ __html: form.html?.form ?? "" }}
+            />
+          </>
+        )}
       </DialogContent>
 
-      <DialogActions>
-        <Button onClick={onClose} disabled={submitting} color="inherit">
-          {intl.formatMessage({ id: "form.cancel" })}
-        </Button>
-        {submitting && (
-          <Box display="flex" alignItems="center" gap={1} px={1}>
-            <CircularProgress size={16} />
-            <Typography variant="body2" color="text.secondary">
-              {intl.formatMessage({ id: "form.submitting" })}
-            </Typography>
-          </Box>
+      <DialogActions
+        sx={{
+          px: { xs: 2, sm: 3 },
+          py: 1.5,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 1,
+        }}
+      >
+        {/* Always-visible "Open in Formstr" link */}
+        {attachment ? (
+          <Button
+            size="small"
+            endIcon={<OpenInNewIcon fontSize="inherit" />}
+            href={buildFormstrUrl(attachment)}
+            target="_blank"
+            rel="noopener noreferrer"
+            sx={{ textTransform: "none", color: "text.secondary", flexShrink: 0 }}
+          >
+            {intl.formatMessage({ id: "form.openExternal" })}
+          </Button>
+        ) : (
+          <Box />
         )}
+
+        <Stack direction="row" spacing={1} alignItems="center">
+          {submitting && (
+            <Stack direction="row" spacing={0.75} alignItems="center">
+              <CircularProgress size={14} />
+              <Typography variant="body2" color="text.secondary">
+                {intl.formatMessage({ id: "form.submitting" })}
+              </Typography>
+            </Stack>
+          )}
+          <Button onClick={onClose} disabled={submitting} color="inherit">
+            {intl.formatMessage({ id: "form.cancel" })}
+          </Button>
+          {showForm && (
+            <Button
+              variant="contained"
+              disabled={submitting || loading}
+              onClick={() => submitFnRef.current?.()}
+            >
+              {intl.formatMessage({ id: "form.submit" })}
+            </Button>
+          )}
+        </Stack>
       </DialogActions>
     </Dialog>
   );
+}
+
+/**
+ * Scoped styles for the SDK-generated form HTML. The SDK emits unstyled
+ * standard HTML: `<label>LabelText<input></label>` for text fields and
+ * `<fieldset>` for radio groups. We stack everything vertically and apply
+ * Material-like input styling.
+ */
+function buildFormSx(theme: Theme) {
+  return {
+    "& form": {
+      display: "flex",
+      flexDirection: "column",
+      gap: "20px",
+      padding: 0,
+      margin: 0,
+    },
+    // The SDK duplicates the form name in an h2; DialogTitle already shows it.
+    "& form h2": { display: "none" },
+    // We supply our own Submit button in DialogActions.
+    "& form button[type='submit']": { display: "none" },
+
+    // label-type fields: plain <div> used for descriptions / section headings.
+    "& form > div": {
+      fontSize: "0.875rem",
+      color: theme.palette.text.secondary,
+      lineHeight: 1.6,
+    },
+
+    // Text field wrappers: <label>LabelText<input ...></label>
+    // The label element acts as both the caption and the wrapper.
+    "& form > label": {
+      display: "flex",
+      flexDirection: "column",
+      gap: "6px",
+      fontSize: "0.875rem",
+      fontWeight: 500,
+      color: theme.palette.text.secondary,
+      cursor: "default",
+    },
+
+    // Text inputs
+    "& form input[type='text']": {
+      boxSizing: "border-box",
+      width: "100%",
+      border: `1px solid ${theme.palette.divider}`,
+      borderRadius: "6px",
+      padding: "10px 14px",
+      fontSize: "1rem",
+      fontFamily: "inherit",
+      fontWeight: 400,
+      color: theme.palette.text.primary,
+      backgroundColor: "transparent",
+      outline: "none",
+      transition: "border-color 150ms, box-shadow 150ms",
+    },
+    "& form input[type='text']:hover": {
+      borderColor: theme.palette.text.primary,
+    },
+    "& form input[type='text']:focus": {
+      borderColor: theme.palette.primary.main,
+      boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.15)}`,
+    },
+
+    // Radio group fieldsets
+    "& form fieldset": {
+      border: "none",
+      padding: 0,
+      margin: 0,
+      display: "flex",
+      flexDirection: "column",
+      gap: "6px",
+      fontSize: "0.875rem",
+      fontWeight: 500,
+      color: theme.palette.text.secondary,
+    },
+    "& form fieldset br": { display: "none" },
+    // Individual radio option labels (inside fieldset)
+    "& form fieldset label": {
+      display: "flex",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: "8px",
+      fontWeight: 400,
+      color: theme.palette.text.primary,
+      cursor: "pointer",
+    },
+    "& form input[type='radio']": {
+      accentColor: theme.palette.primary.main,
+      width: "16px",
+      height: "16px",
+      cursor: "pointer",
+      flexShrink: 0,
+    },
+  } as const;
 }
