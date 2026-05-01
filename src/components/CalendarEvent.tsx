@@ -20,7 +20,7 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import { ICalendarEvent } from "../utils/types";
+import { ICalendarEvent, RSVPStatus } from "../utils/types";
 import { PositionedEvent } from "../common/calendarEngine";
 import { TimeRenderer } from "./TimeRenderer";
 import { useState, useEffect } from "react";
@@ -71,6 +71,21 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 interface CalendarEventCardProps {
   event: PositionedEvent;
   offset?: string;
+}
+
+function toParticipantRSVPResponse(
+  status: RSVPStatus | undefined,
+): RSVPResponse {
+  switch (status) {
+    case RSVPStatus.accepted:
+      return RSVPResponse.accepted;
+    case RSVPStatus.declined:
+      return RSVPResponse.declined;
+    case RSVPStatus.tentative:
+      return RSVPResponse.tentative;
+    default:
+      return RSVPResponse.pending;
+  }
 }
 
 export interface CalendarEventViewProps {
@@ -524,7 +539,7 @@ export function CalendarEvent({ event }: CalendarEventViewProps) {
                 {intl.formatMessage({ id: "form.attachments" })}
               </Typography>
               <Stack spacing={1}>
-                {event.forms.map((f, i) => (
+                {event.forms?.map((f, i) => (
                   <FormAttachmentRow
                     key={`${f.naddr}-${i}`}
                     form={f}
@@ -547,10 +562,9 @@ export function CalendarEvent({ event }: CalendarEventViewProps) {
                   <Participant
                     pubKey={p}
                     isAuthor={p === event.user}
-                    rsvpResponse={
-                      (rsvpByPubkey[p]?.status as RSVPResponse) ??
-                      RSVPResponse.pending
-                    }
+                    rsvpResponse={toParticipantRSVPResponse(
+                      rsvpByPubkey[p]?.status,
+                    )}
                   />
                 </Box>
               ))}
