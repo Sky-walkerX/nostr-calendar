@@ -14,12 +14,14 @@ import { TimeMarker } from "./TimeMarker";
 import { useRef, useState } from "react";
 import CalendarEventEdit from "./CalendarEventEdit";
 import { ViewProps } from "./SwipeableView";
+import { useIntl } from "react-intl";
 
 dayjs.extend(weekday);
 dayjs.extend(isSameOrBefore);
 dayjs.extend(isSameOrAfter);
 
 export function DayView({ events, date }: ViewProps) {
+  const intl = useIntl();
   const dayStart = date.startOf("day").valueOf();
   const dayEnd = dayStart + 24 * 60 * 60 * 1000;
   const allDayEvents = events.filter(
@@ -55,7 +57,7 @@ export function DayView({ events, date }: ViewProps) {
             justifyContent="center"
           >
             <Typography variant="caption" sx={{ color: "text.secondary" }}>
-              all-day
+              {intl.formatMessage({ id: "event.allDayLabel" })}
             </Typography>
           </Box>
           <Box flex={1} p={0.5}>

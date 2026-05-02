@@ -241,6 +241,7 @@ export function CalendarSidebar({ onClose }: CalendarSidebarProps) {
  * where the bridge is unavailable.
  */
 function DeviceCalendarsSection() {
+  const intl = useIntl();
   const available = useDeviceCalendars((s) => s.available);
   const permission = useDeviceCalendars((s) => s.permission);
   const calendars = useDeviceCalendars((s) => s.calendars);
@@ -249,22 +250,23 @@ function DeviceCalendarsSection() {
   const toggleVisibility = useDeviceCalendars((s) => s.toggleVisibility);
   const setAllVisibility = useDeviceCalendars((s) => s.setAllVisibility);
   const refreshCalendars = useDeviceCalendars((s) => s.refreshCalendars);
-  const openAppSettings = useDeviceCalendars((s) => s.openAppSettings);
-  const permanentlyDenied = useDeviceCalendars((s) => s.permanentlyDenied);
   const loading = useDeviceCalendars((s) => s.loading);
   const error = useDeviceCalendars((s) => s.error);
+  const localDeviceLabel = intl.formatMessage({
+    id: "deviceCalendar.localDevice",
+  });
 
   const groupedCalendars = useMemo(() => {
     const groups = new Map<string, typeof calendars>();
     for (const calendar of calendars) {
-      const key = calendar.accountName || "Local device";
+      const key = calendar.accountName || localDeviceLabel;
       if (!groups.has(key)) {
         groups.set(key, []);
       }
       groups.get(key)!.push(calendar);
     }
     return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [calendars]);
+  }, [calendars, localDeviceLabel]);
 
   const visibleCount = calendars.filter(
     (c) => visibility[c.id] !== false,
@@ -281,12 +283,18 @@ function DeviceCalendarsSection() {
         mb={1}
       >
         <Typography variant="subtitle2" fontWeight={600}>
-          Device calendars
+          {intl.formatMessage({ id: "deviceCalendar.title" })}
         </Typography>
         <Stack direction="row" alignItems="center" spacing={0.5}>
           {permission === "granted" && calendars.length > 0 && (
             <Typography variant="caption" color="text.secondary">
-              {visibleCount}/{calendars.length} visible
+              {intl.formatMessage(
+                { id: "deviceCalendar.visibleCount" },
+                {
+                  visibleCount,
+                  calendarCount: calendars.length,
+                },
+              )}
             </Typography>
           )}
           {permission === "granted" && (
@@ -294,7 +302,7 @@ function DeviceCalendarsSection() {
               size="small"
               onClick={() => void refreshCalendars()}
               disabled={loading}
-              title="Refresh device calendars"
+              title={intl.formatMessage({ id: "deviceCalendar.refresh" })}
             >
               <RefreshIcon
                 fontSize="small"
@@ -313,41 +321,22 @@ function DeviceCalendarsSection() {
 
       {error && (
         <Alert severity="error" sx={{ mb: 1 }} variant="outlined">
-          {error}
+          {intl.formatMessage({ id: error })}
         </Alert>
       )}
 
       {permission !== "granted" ? (
         <Box py={1}>
-          {permanentlyDenied ? (
-            <>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                Calendar permission was denied. Open system settings to grant
-                access, then return here.
-              </Typography>
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={() => void openAppSettings()}
-              >
-                Open settings
-              </Button>
-            </>
-          ) : (
-            <>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                Show events from your phone's calendar apps alongside Nostr
-                events.
-              </Typography>
-              <Button size="small" variant="outlined" onClick={requestAccess}>
-                Connect device calendars
-              </Button>
-            </>
-          )}
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            {intl.formatMessage({ id: "deviceCalendar.connectHelp" })}
+          </Typography>
+          <Button size="small" variant="outlined" onClick={requestAccess}>
+            {intl.formatMessage({ id: "deviceCalendar.connect" })}
+          </Button>
         </Box>
       ) : calendars.length === 0 ? (
         <Typography variant="body2" color="text.secondary" py={1}>
-          No calendars found on this device.
+          {intl.formatMessage({ id: "deviceCalendar.empty" })}
         </Typography>
       ) : (
         <>
@@ -358,7 +347,7 @@ function DeviceCalendarsSection() {
               disabled={visibleCount === calendars.length}
               onClick={() => setAllVisibility(true)}
             >
-              Show all
+              {intl.formatMessage({ id: "deviceCalendar.showAll" })}
             </Button>
             <Button
               size="small"
@@ -366,7 +355,7 @@ function DeviceCalendarsSection() {
               disabled={visibleCount === 0}
               onClick={() => setAllVisibility(false)}
             >
-              Hide all
+              {intl.formatMessage({ id: "deviceCalendar.hideAll" })}
             </Button>
           </Stack>
 
@@ -438,7 +427,10 @@ function DeviceCalendarsSection() {
                             whiteSpace: "normal",
                           }}
                         >
-                          {c.name}
+                          {c.name.trim() ||
+                            intl.formatMessage({
+                              id: "deviceCalendar.unnamed",
+                            })}
                         </Typography>
                       </Box>
                     </Box>

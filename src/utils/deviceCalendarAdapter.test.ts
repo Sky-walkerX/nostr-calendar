@@ -72,9 +72,9 @@ describe("deviceCalendarAdapter", () => {
     expect(deviceEventToCalendarEvent(noLoc).location).toEqual([]);
   });
 
-  it("provides a placeholder title for events with no name", () => {
+  it("preserves an empty title when the native event has no name", () => {
     const noTitle = { ...baseEvent, title: "" };
-    expect(deviceEventToCalendarEvent(noTitle).title).toBe("(No title)");
+    expect(deviceEventToCalendarEvent(noTitle).title).toBe("");
   });
 
   it("returns a fallback color for invalid hex input", () => {

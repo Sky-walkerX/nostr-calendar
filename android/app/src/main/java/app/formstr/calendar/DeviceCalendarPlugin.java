@@ -3,11 +3,8 @@ package app.formstr.calendar;
 import android.Manifest;
 import android.content.ContentResolver;
 import android.content.ContentUris;
-import android.content.Intent;
 import android.database.Cursor;
-import android.net.Uri;
 import android.provider.CalendarContract;
-import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -107,7 +104,7 @@ public class DeviceCalendarPlugin extends Plugin {
 
                 JSObject obj = new JSObject();
                 obj.put("id", String.valueOf(id));
-                obj.put("name", TextUtils.isEmpty(name) ? "(Unnamed)" : name);
+                obj.put("name", TextUtils.isEmpty(name) ? "" : name);
                 obj.put("accountName", accountName == null ? "" : accountName);
                 obj.put("color", colorIntToHex(color));
                 obj.put("isPrimary", isPrimary);
@@ -228,25 +225,6 @@ public class DeviceCalendarPlugin extends Plugin {
         JSObject result = new JSObject();
         result.put("events", events);
         call.resolve(result);
-    }
-
-    /**
-     * Opens the app's system settings page so the user can flip calendar
-     * permission back on after Android has stopped surfacing the runtime
-     * dialog (repeated denial / "don't ask again").
-     */
-    @PluginMethod
-    public void openAppSettings(PluginCall call) {
-        try {
-            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-            intent.setData(Uri.fromParts("package", getContext().getPackageName(), null));
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            getContext().startActivity(intent);
-            call.resolve();
-        } catch (Exception e) {
-            Log.e(TAG, "openAppSettings failed", e);
-            call.reject("Failed to open app settings: " + e.getMessage());
-        }
     }
 
     private PermissionState currentPermissionState() {

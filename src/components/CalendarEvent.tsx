@@ -42,7 +42,11 @@ import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
 import dayjs from "dayjs";
 import { exportICS, isMobile } from "../common/utils";
 import { encodeNAddr } from "../common/nostr";
-import { getDuplicateEventPage, getEditEventPage, getEventPage } from "../utils/routingHelper";
+import {
+  getDuplicateEventPage,
+  getEditEventPage,
+  getEventPage,
+} from "../utils/routingHelper";
 import { useNavigate } from "react-router";
 import { getAppBaseUrl, isNative } from "../utils/platform";
 import { useNotifications } from "../stores/notifications";
@@ -53,7 +57,7 @@ import {
   DEVICE_CALENDAR_ID_PREFIX,
   deviceCalendarColor,
 } from "../utils/deviceCalendarAdapter";
-import { FormattedMessage, useIntl } from "react-intl";
+import { FormattedMessage, useIntl, type IntlShape } from "react-intl";
 import { useUser } from "../stores/user";
 import { DeleteEventDialog } from "./DeleteEventDialog";
 import { CalendarListSelect } from "./CalendarListSelect";
@@ -131,11 +135,12 @@ function getColorScheme(
     };
   }
 
-  // Device-sourced events get a muted, calendar-coloured style.
+  // Device-sourced events use the full calendar color so they carry the same
+  // visual weight as other calendars.
   if (event.source === "device" && calendarColor) {
     return {
       color: "#fff",
-      backgroundColor: alpha(calendarColor, 0.6),
+      backgroundColor: calendarColor,
       border: `1px solid ${alpha(calendarColor, 0.9)}`,
     };
   }
@@ -161,6 +166,26 @@ function getColorScheme(
   };
 }
 
+function getEventDisplayTitle(
+  event: ICalendarEvent,
+  intl: IntlShape,
+  maxDescLength = 20,
+): string {
+  const title = event.title?.trim();
+  if (title) {
+    return title;
+  }
+
+  const description = event.description?.trim() ?? "";
+  if (description) {
+    return description.length > maxDescLength
+      ? `${description.substring(0, maxDescLength)}...`
+      : description;
+  }
+
+  return intl.formatMessage({ id: "event.untitled" });
+}
+
 export function CalendarEventCard({
   event,
   offset = "0px",
@@ -168,17 +193,13 @@ export function CalendarEventCard({
   // const { attributes, listeners, setNodeRef } = useDraggable({ id: event.id });
   const [open, setOpen] = useState(false);
   const handleClose = () => setOpen(false);
-  const maxDescLength = 20;
+  const intl = useIntl();
   const theme = useTheme();
 
   const resolvedColor = useResolvedCalendarColor(event);
 
   const colorScheme = getColorScheme(event, theme, resolvedColor);
-  const title =
-    event.title ??
-    (event.description.length > maxDescLength
-      ? `${event.description.substring(0, maxDescLength)}...`
-      : event.description);
+  const title = getEventDisplayTitle(event, intl);
   return (
     <>
       <Paper
@@ -230,14 +251,10 @@ export function CalendarEventView({
   open = false,
   onClose,
 }: CalendarEventViewProps) {
+  const intl = useIntl();
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
-  const maxDescLength = 20;
-  const title =
-    event.title ??
-    (event.description.length > maxDescLength
-      ? `${event.description.substring(0, maxDescLength)}...`
-      : event.description);
+  const title = getEventDisplayTitle(event, intl);
 
   const handleClose = () => onClose?.();
 
@@ -610,7 +627,7 @@ export function CalendarEvent({ event }: CalendarEventViewProps) {
             <>
               <Divider />
               <Typography variant="caption" color="text.secondary">
-                From your device calendar — read-only.
+                {intl.formatMessage({ id: "event.deviceReadOnly" })}
               </Typography>
             </>
           ) : (
@@ -942,6 +959,7 @@ function InvitationAcceptBar({ event }: { event: ICalendarEvent }) {
 /** Compact pill used in the all-day banner row of Day and Week views. */
 export function AllDayEventChip({ event }: { event: ICalendarEvent }) {
   const [open, setOpen] = useState(false);
+  const intl = useIntl();
   const theme = useTheme();
 
   const resolvedColor = useResolvedCalendarColor(event);
@@ -972,7 +990,7 @@ export function AllDayEventChip({ event }: { event: ICalendarEvent }) {
               sx={{ fontSize: 12, mr: 0.5, verticalAlign: "middle" }}
             />
           )}
-          {event.title}
+          {getEventDisplayTitle(event, intl)}
         </Typography>
       </Box>
       <CalendarEventView

@@ -17,6 +17,7 @@ import { TimeMarker } from "./TimeMarker";
 import { useRef, useState } from "react";
 import CalendarEventEdit from "./CalendarEventEdit";
 import { ViewProps } from "./SwipeableView";
+import { useIntl } from "react-intl";
 
 dayjs.extend(weekday);
 dayjs.extend(isSameOrBefore);
@@ -57,6 +58,7 @@ export const WeekHeader = ({ date }: { date: Dayjs }) => {
 };
 
 export function WeekView({ events, date }: ViewProps) {
+  const intl = useIntl();
   const start = date.startOf("week");
 
   const days = Array.from({ length: 7 }, (_, i) => start.add(i, "day"));
@@ -102,7 +104,7 @@ export function WeekView({ events, date }: ViewProps) {
             flexShrink={0}
           >
             <Typography variant="caption" sx={{ color: "text.secondary" }}>
-              all-day
+              {intl.formatMessage({ id: "event.allDayLabel" })}
             </Typography>
           </Box>
           <Box flex={1} display="grid" gridTemplateColumns="repeat(7, 1fr)">

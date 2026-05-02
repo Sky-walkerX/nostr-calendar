@@ -65,7 +65,6 @@ export interface DeviceCalendarPluginShape {
   listEvents(
     options: ListEventsOptions,
   ): Promise<{ events: DeviceCalendarEvent[] }>;
-  openAppSettings(): Promise<void>;
 }
 
 const deviceCalendar =
@@ -95,13 +94,5 @@ export const DeviceCalendar = {
     if (!isAvailable()) return [];
     const result = await deviceCalendar.listEvents(options);
     return result.events ?? [];
-  },
-  /**
-   * Sends the user to the app's system settings page so they can re-enable
-   * calendar permission after Android stops surfacing the runtime dialog.
-   */
-  async openAppSettings(): Promise<void> {
-    if (!isAvailable()) return;
-    await deviceCalendar.openAppSettings();
   },
 };

@@ -27,12 +27,6 @@ interface DeviceCalendarsState {
   available: boolean;
   /** Permission state mirrored from the native side. */
   permission: DeviceCalendarPermissionState | "unknown";
-  /**
-   * True once the user has explicitly denied a request in-app and Android is
-   * no longer surfacing the OS dialog. Drives the "Open settings" recovery
-   * UI in the sidebar.
-   */
-  permanentlyDenied: boolean;
   calendars: DeviceCalendarInfo[];
   /** Native -> visible flag, persisted to localStorage. Default-on once discovered. */
   visibility: Visibility;
@@ -44,12 +38,44 @@ interface DeviceCalendarsState {
   init: () => Promise<void>;
   syncPermission: () => Promise<void>;
   requestAccess: () => Promise<void>;
-  openAppSettings: () => Promise<void>;
   refreshCalendars: () => Promise<void>;
   refreshEvents: (range: { startMs: number; endMs: number }) => Promise<void>;
   toggleVisibility: (nativeCalendarId: string) => void;
   setAllVisibility: (visible: boolean) => void;
 }
+
+const DEVICE_CALENDAR_ERROR_MESSAGES = {
+  invalidCalendarIds: "deviceCalendar.errorInvalidCalendarIds",
+  invalidRange: "deviceCalendar.errorInvalidRange",
+  permissionDenied: "deviceCalendar.errorPermissionDenied",
+  readCalendars: "deviceCalendar.errorReadCalendars",
+  readEvents: "deviceCalendar.errorReadEvents",
+  unknown: "deviceCalendar.errorUnknown",
+} as const;
+
+const normalizeDeviceCalendarError = (error: unknown): string => {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (message === "Calendar permission not granted") {
+    return DEVICE_CALENDAR_ERROR_MESSAGES.permissionDenied;
+  }
+  if (message === "Invalid calendarIds payload") {
+    return DEVICE_CALENDAR_ERROR_MESSAGES.invalidCalendarIds;
+  }
+  if (
+    message === "startMs and endMs are required, and endMs must be > startMs"
+  ) {
+    return DEVICE_CALENDAR_ERROR_MESSAGES.invalidRange;
+  }
+  if (message.startsWith("Failed to read calendars:")) {
+    return DEVICE_CALENDAR_ERROR_MESSAGES.readCalendars;
+  }
+  if (message.startsWith("Failed to read events:")) {
+    return DEVICE_CALENDAR_ERROR_MESSAGES.readEvents;
+  }
+
+  return DEVICE_CALENDAR_ERROR_MESSAGES.unknown;
+};
 
 const getInitialPermission = (): DeviceCalendarPermissionState | "unknown" => {
   if (!DeviceCalendar.isAvailable()) {
@@ -79,7 +105,6 @@ export const useDeviceCalendars = create<DeviceCalendarsState>((set, get) => {
   return {
     available: DeviceCalendar.isAvailable(),
     permission: getInitialPermission(),
-    permanentlyDenied: false,
     calendars: [],
     visibility: getItem<Visibility>(VISIBILITY_STORAGE_KEY, {}),
     events: [],
@@ -106,15 +131,9 @@ export const useDeviceCalendars = create<DeviceCalendarsState>((set, get) => {
       try {
         const status = await DeviceCalendar.checkPermissions();
         persistPermission(status.calendar);
-        // syncPermission runs on app resume etc.; we never *infer* permanent
-        // denial here, only requestAccess can flip the flag, and only granted
-        // can clear it.
         set({
           available: true,
           permission: status.calendar,
-          ...(status.calendar === "granted"
-            ? { permanentlyDenied: false }
-            : {}),
         });
         if (status.calendar === "granted") {
           await get().refreshCalendars();
@@ -123,27 +142,16 @@ export const useDeviceCalendars = create<DeviceCalendarsState>((set, get) => {
           set({ events: [] });
         }
       } catch (e) {
-        set({ error: (e as Error).message });
+        set({ error: normalizeDeviceCalendarError(e) });
       }
     },
 
     async requestAccess() {
       if (!DeviceCalendar.isAvailable()) return;
-      const previous = get().permission;
       try {
         const status = await DeviceCalendar.requestPermissions();
         persistPermission(status.calendar);
-        // If the user was already "denied" before this call and the OS still
-        // returned "denied" without a prompt, treat it as permanently denied.
-        // "prompt-with-rationale" still has a path forward via another request,
-        // so it is not considered permanent.
-        const permanentlyDenied =
-          status.calendar === "denied" && previous === "denied";
-        set({
-          permission: status.calendar,
-          permanentlyDenied:
-            status.calendar === "granted" ? false : permanentlyDenied,
-        });
+        set({ permission: status.calendar });
         if (status.calendar === "granted") {
           await get().refreshCalendars();
         } else {
@@ -151,15 +159,7 @@ export const useDeviceCalendars = create<DeviceCalendarsState>((set, get) => {
           set({ events: [] });
         }
       } catch (e) {
-        set({ error: (e as Error).message });
-      }
-    },
-
-    async openAppSettings() {
-      try {
-        await DeviceCalendar.openAppSettings();
-      } catch (e) {
-        set({ error: (e as Error).message });
+        set({ error: normalizeDeviceCalendarError(e) });
       }
     },
 
@@ -181,7 +181,7 @@ export const useDeviceCalendars = create<DeviceCalendarsState>((set, get) => {
         if (changed) setItem(VISIBILITY_STORAGE_KEY, next);
         set({ calendars, visibility: next, loading: false });
       } catch (e) {
-        set({ loading: false, error: (e as Error).message });
+        set({ loading: false, error: normalizeDeviceCalendarError(e) });
       }
     },
 
@@ -213,7 +213,7 @@ export const useDeviceCalendars = create<DeviceCalendarsState>((set, get) => {
         set({ events: native.map(deviceEventToCalendarEvent) });
       } catch (e) {
         if (generation !== refreshGeneration) return;
-        set({ error: (e as Error).message });
+        set({ error: normalizeDeviceCalendarError(e) });
       }
     },
 

@@ -38,11 +38,13 @@ export const TimeRenderer = ({
   repeat: ICalendarEvent["repeat"];
   allDay?: boolean;
 }) => {
+  const intl = useIntl();
   // For all-day events, `end` is the exclusive midnight of the day after the
   // last full day, so subtract 1ms before formatting to get the inclusive
   // "last day" label users expect.
   const lastDay = dayjs(end - 1);
   const isMultiDay = allDay && !lastDay.isSame(dayjs(begin), "day");
+  const allDayLabel = intl.formatMessage({ id: "event.allDayLabel" });
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -51,10 +53,21 @@ export const TimeRenderer = ({
         <Typography>
           {allDay
             ? isMultiDay
-              ? `${dayjs(begin).format("ddd, DD MMM")} – ${lastDay.format(
-                  "ddd, DD MMM YYYY",
-                )} ⋅ All day`
-              : `${dayjs(begin).format("ddd, DD MMMM YYYY")} ⋅ All day`
+              ? intl.formatMessage(
+                  { id: "event.allDayDateRange" },
+                  {
+                    start: dayjs(begin).format("ddd, DD MMM"),
+                    end: lastDay.format("ddd, DD MMM YYYY"),
+                    label: allDayLabel,
+                  },
+                )
+              : intl.formatMessage(
+                  { id: "event.allDayDate" },
+                  {
+                    date: dayjs(begin).format("ddd, DD MMMM YYYY"),
+                    label: allDayLabel,
+                  },
+                )
             : `${dayjs(begin).format(
                 "ddd, DD MMMM YYYY ⋅ HH:mm -",
               )} ${dayjs(end).format("HH:mm")}`}

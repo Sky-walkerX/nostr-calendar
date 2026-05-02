@@ -29,7 +29,7 @@ export function deviceEventToCalendarEvent(
     id: evt.id,
     eventId: "",
     kind: -1,
-    title: evt.title || "(No title)",
+    title: evt.title || "",
     description: evt.description || "",
     begin: evt.beginMs,
     end: evt.endMs,
