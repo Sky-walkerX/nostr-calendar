@@ -93,8 +93,10 @@ export function FormFillerDialog({
     setSubmitError(null);
     setForm(null);
     try {
-      if (!sdkRef.current) sdkRef.current = new FormstrSDK();
-      const sdk = sdkRef.current;
+      // Create a fresh SDK instance per fetch so submit listeners do not
+      // accumulate across retries or re-opened dialogs.
+      const sdk = new FormstrSDK();
+      sdkRef.current = sdk;
       const fetched = (await (
         attachment.viewKey
           ? sdk.fetchFormWithViewKey(attachment.naddr, attachment.viewKey)
@@ -121,6 +123,7 @@ export function FormFillerDialog({
       setForm(null);
       setFetchError(null);
       setSubmitError(null);
+      sdkRef.current = null;
       submitFnRef.current = null;
     }
   }, [open, attachment, fetchForm]);
@@ -165,6 +168,7 @@ export function FormFillerDialog({
     };
     formEl.addEventListener("submit", onSubmitDom);
     return () => {
+      submitFnRef.current = null;
       formEl.removeEventListener("submit", onSubmitDom);
     };
   }, [form, intl, onSubmitted]);
