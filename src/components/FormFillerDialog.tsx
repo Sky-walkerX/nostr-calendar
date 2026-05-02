@@ -19,7 +19,7 @@
  * - On submit failure: surface the error and let the user retry.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -41,6 +41,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { FormstrSDK } from "@formstr/sdk";
+import dayjs from "dayjs";
 import type { Event as NostrEvent, EventTemplate } from "nostr-tools";
 import { useIntl } from "react-intl";
 import type { IFormAttachment } from "../utils/types";
@@ -50,11 +51,158 @@ import { useUser } from "../stores/user";
 import { buildFormstrUrl } from "../utils/formLink";
 
 // SDK's NormalizedForm shape (subset we touch)
+type SdkOption = {
+  id: string;
+  labelHtml: string;
+  config?: { isOther?: boolean };
+};
+
+type SdkField = {
+  id: string;
+  type: string;
+  labelHtml: string;
+  options?: SdkOption[] | unknown;
+  config?: { renderElement?: string };
+};
+
 type SdkForm = {
   id: string;
   name?: string;
   html?: { form: string };
+  fields?: Record<string, SdkField>;
+  fieldOrder?: string[];
 };
+
+type ResponseRow = {
+  fieldId: string;
+  question: string;
+  answer: string;
+};
+
+function plainText(html: string | undefined): string {
+  if (!html) return "";
+  if (typeof document === "undefined") {
+    return html.replace(/<[^>]*>/g, "").trim();
+  }
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  return (div.textContent || div.innerText || "").trim();
+}
+
+function parseMetadata(raw: string | undefined): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function formatAnswer(
+  field: SdkField | undefined,
+  rawValue: string | undefined,
+  metadataRaw: string | undefined,
+  noAnswerLabel: string,
+): string {
+  if (!rawValue) return noAnswerLabel;
+  if (!field) return rawValue;
+
+  if (field.type === "option" && Array.isArray(field.options)) {
+    const metadata = parseMetadata(metadataRaw);
+    const selectedIds = rawValue.split(";").filter(Boolean);
+    const labels = selectedIds.map((id) => {
+      const options = Array.isArray(field.options) ? field.options : [];
+      const option = options.find((o) => o.id === id);
+      const label = option ? plainText(option.labelHtml) : id;
+      if (option?.config?.isOther && typeof metadata.message === "string") {
+        return `${label} (${metadata.message})`;
+      }
+      return label;
+    });
+    return labels.length > 0 ? labels.join(", ") : rawValue;
+  }
+
+  if (field.type === "grid") {
+    try {
+      const parsed = JSON.parse(rawValue) as Record<string, string>;
+      if (parsed && typeof parsed === "object") {
+        return Object.entries(parsed)
+          .map(([rowId, selected]) => `${rowId}: ${selected}`)
+          .join(" | ");
+      }
+    } catch {
+      return rawValue;
+    }
+  }
+
+  if (field.config?.renderElement === "datetime") {
+    const timestamp = Number(rawValue);
+    if (Number.isFinite(timestamp)) {
+      return new Date(timestamp * 1000).toLocaleString();
+    }
+  }
+
+  if (field.config?.renderElement === "fileUpload") {
+    try {
+      const metadata = JSON.parse(rawValue) as { filename?: string };
+      if (metadata.filename) return metadata.filename;
+    } catch {
+      return rawValue;
+    }
+  }
+
+  return rawValue;
+}
+
+function responseRowsFromEvent(
+  response: NostrEvent,
+  form: SdkForm | null,
+  noAnswerLabel: string,
+  unknownQuestionLabel: string,
+): ResponseRow[] {
+  const responseTags = response.tags.filter(
+    (tag) => tag[0] === "response" && tag[1],
+  );
+  const tagsByField = new Map<string, string[]>();
+  for (const tag of responseTags) {
+    tagsByField.set(tag[1], tag);
+  }
+
+  const rows: ResponseRow[] = [];
+  const consumed = new Set<string>();
+  const fields = form?.fields ?? {};
+  const fieldOrder = form?.fieldOrder ?? [];
+
+  for (const fieldId of fieldOrder) {
+    const field = fields[fieldId];
+    if (!field || field.type === "label") continue;
+    const tag = tagsByField.get(fieldId);
+    if (!tag) continue;
+    consumed.add(fieldId);
+    rows.push({
+      fieldId,
+      question:
+        plainText(field.labelHtml) || `${unknownQuestionLabel} ${fieldId}`,
+      answer: formatAnswer(field, tag[2], tag[3], noAnswerLabel),
+    });
+  }
+
+  for (const tag of responseTags) {
+    const fieldId = tag[1];
+    if (consumed.has(fieldId)) continue;
+    const field = fields[fieldId];
+    rows.push({
+      fieldId,
+      question: field
+        ? plainText(field.labelHtml) || `${unknownQuestionLabel} ${fieldId}`
+        : `${unknownQuestionLabel} ${fieldId}`,
+      answer: formatAnswer(field, tag[2], tag[3], noAnswerLabel),
+    });
+  }
+
+  return rows;
+}
 
 type Props = {
   open: boolean;
@@ -64,7 +212,7 @@ type Props = {
   /** Total number of attachments in the list, for multi-form flows. */
   total?: number;
   onClose: () => void;
-  onSubmitted: (response: NostrEvent) => void;
+  onSubmitted: (response: NostrEvent | null) => void;
 };
 
 export function FormFillerDialog({
@@ -95,6 +243,15 @@ export function FormFillerDialog({
   const [submitting, setSubmitting] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const responseRows = useMemo(() => {
+    if (status.state !== "submitted" || !status.event) return [];
+    return responseRowsFromEvent(
+      status.event,
+      form,
+      intl.formatMessage({ id: "form.noAnswer" }),
+      intl.formatMessage({ id: "form.unknownQuestion" }),
+    );
+  }, [status, form, intl]);
 
   const fetchForm = useCallback(async () => {
     if (!attachment) return;
@@ -122,13 +279,15 @@ export function FormFillerDialog({
     }
   }, [attachment, intl]);
 
-  // Fetch the form template only when we should render it.
+  // Fetch the form template whenever we need to render either the editable
+  // SDK form or a read-only summary of the user's previous response.
   useEffect(() => {
     const shouldRender =
       open &&
       attachment &&
       (status.state === "not-submitted" ||
         status.state === "error" ||
+        status.state === "submitted" ||
         resubmitting);
     if (shouldRender) fetchForm();
     if (!open) {
@@ -236,8 +395,8 @@ export function FormFillerDialog({
               <Button
                 variant="contained"
                 onClick={() => {
-                  if (status.state === "submitted" && status.event) {
-                    onSubmitted(status.event);
+                  if (status.state === "submitted") {
+                    onSubmitted(status.event ?? null);
                   } else {
                     onClose();
                   }
@@ -249,6 +408,66 @@ export function FormFillerDialog({
                 {intl.formatMessage({ id: "form.submitAgain" })}
               </Button>
             </Stack>
+
+            {status.state === "submitted" &&
+              status.event &&
+              responseRows.length > 0 && (
+                <Box
+                  sx={{
+                    border: `1px solid ${theme.palette.divider}`,
+                    borderRadius: 1,
+                    overflow: "hidden",
+                  }}
+                >
+                  <Box
+                    sx={{
+                      px: 1.5,
+                      py: 1,
+                      borderBottom: `1px solid ${theme.palette.divider}`,
+                      bgcolor: "action.hover",
+                    }}
+                  >
+                    <Typography variant="subtitle2">
+                      {intl.formatMessage({ id: "form.yourResponse" })}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {dayjs(status.submittedAt).format("YYYY-MM-DD HH:mm")}
+                    </Typography>
+                  </Box>
+                  <Stack spacing={0}>
+                    {responseRows.map((row, index) => (
+                      <Box
+                        key={`${row.fieldId}-${index}`}
+                        sx={{
+                          px: 1.5,
+                          py: 1.25,
+                          borderTop:
+                            index === 0
+                              ? "none"
+                              : `1px solid ${theme.palette.divider}`,
+                        }}
+                      >
+                        <Typography variant="caption" color="text.secondary">
+                          {row.question}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          sx={{ whiteSpace: "pre-wrap" }}
+                        >
+                          {row.answer}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+
+            {status.state === "submitted" &&
+              (!status.event || responseRows.length === 0) && (
+                <Typography variant="body2" color="text.secondary">
+                  {intl.formatMessage({ id: "form.responseUnavailable" })}
+                </Typography>
+              )}
           </Stack>
         )}
 

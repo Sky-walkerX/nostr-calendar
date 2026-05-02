@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { naddrEncode } from "nostr-tools/nip19";
 import {
+  buildFormstrResponsesUrl,
   buildFormstrUrl,
   extractNaddr,
   extractResponseKey,
@@ -83,9 +84,7 @@ describe("extractResponseKey", () => {
   it("decodes #nkeys1 hash fragment to viewKey (Formstr's modern format)", async () => {
     // Build a real nkeys blob using the SDK's encoder so the test
     // round-trips through the same TLV path the SDK uses at runtime.
-    const { encodeNKeys } = await import(
-      "@formstr/sdk/dist/utils/nkeys.js"
-    );
+    const { encodeNKeys } = await import("@formstr/sdk/dist/utils/nkeys.js");
     const viewKeyHex =
       "4425edf8b0c0ab84f47718452c6dd0fcfb6df2ec73ad868b31eefe0f18abc8f8";
     const nkeys = encodeNKeys({ viewKey: viewKeyHex });
@@ -95,9 +94,7 @@ describe("extractResponseKey", () => {
   });
 
   it("prefers nkeys hash over query params when both are present", async () => {
-    const { encodeNKeys } = await import(
-      "@formstr/sdk/dist/utils/nkeys.js"
-    );
+    const { encodeNKeys } = await import("@formstr/sdk/dist/utils/nkeys.js");
     const hashKey = "a".repeat(64);
     const nkeys = encodeNKeys({ viewKey: hashKey });
     expect(
@@ -153,6 +150,20 @@ describe("buildFormstrUrl", () => {
     expect(buildFormstrUrl({ naddr: SAMPLE_NADDR, responseKey: "a/b" })).toBe(
       `https://formstr.app/f/${SAMPLE_NADDR}?viewKey=a%2Fb`,
     );
+  });
+});
+
+describe("buildFormstrResponsesUrl", () => {
+  it("builds a Formstr responses URL when no response key", () => {
+    expect(buildFormstrResponsesUrl({ naddr: SAMPLE_NADDR })).toBe(
+      `https://formstr.app/s/${SAMPLE_NADDR}`,
+    );
+  });
+
+  it("passes responseKey as ?viewKey= query param", () => {
+    expect(
+      buildFormstrResponsesUrl({ naddr: SAMPLE_NADDR, responseKey: "a/b" }),
+    ).toBe(`https://formstr.app/s/${SAMPLE_NADDR}?viewKey=a%2Fb`);
   });
 });
 
