@@ -38,15 +38,12 @@ import {
 import type { Theme } from "@mui/material/styles";
 import { alpha } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { FormstrSDK } from "@formstr/sdk";
 import type { Event as NostrEvent, EventTemplate } from "nostr-tools";
 import { useIntl } from "react-intl";
 import type { IFormAttachment } from "../utils/types";
 import { signerManager } from "../common/signer";
-import { useFormSubmissionStatus } from "../hooks/useFormSubmissionStatus";
-import { useUser } from "../stores/user";
 import { buildFormstrUrl } from "../utils/formLink";
 
 // SDK's NormalizedForm shape (subset we touch)
@@ -82,13 +79,6 @@ export function FormFillerDialog({
   const sdkRef = useRef<FormstrSDK | null>(null);
   // Stored by the form-setup effect so DialogActions can trigger submit.
   const submitFnRef = useRef<(() => void) | null>(null);
-  const { user } = useUser();
-  const { status, markSubmitted } = useFormSubmissionStatus(
-    open ? attachment?.naddr : undefined,
-    open ? user?.pubkey : undefined,
-  );
-  const alreadySubmitted = status.state === "submitted";
-  const [resubmitting, setResubmitting] = useState(false);
 
   const [form, setForm] = useState<SdkForm | null>(null);
   const [loading, setLoading] = useState(false);
@@ -106,8 +96,8 @@ export function FormFillerDialog({
       if (!sdkRef.current) sdkRef.current = new FormstrSDK();
       const sdk = sdkRef.current;
       const fetched = (await (
-        attachment.responseKey
-          ? sdk.fetchFormWithViewKey(attachment.naddr, attachment.responseKey)
+        attachment.viewKey
+          ? sdk.fetchFormWithViewKey(attachment.naddr, attachment.viewKey)
           : sdk.fetchForm(attachment.naddr)
       )) as SdkForm;
       sdk.renderHtml(fetched as never);
@@ -126,21 +116,14 @@ export function FormFillerDialog({
 
   // Fetch the form template only when we should render it.
   useEffect(() => {
-    const shouldRender =
-      open &&
-      attachment &&
-      (status.state === "not-submitted" ||
-        status.state === "error" ||
-        resubmitting);
-    if (shouldRender) fetchForm();
+    if (open && attachment) fetchForm();
     if (!open) {
       setForm(null);
       setFetchError(null);
       setSubmitError(null);
-      setResubmitting(false);
       submitFnRef.current = null;
     }
-  }, [open, attachment, fetchForm, status.state, resubmitting]);
+  }, [open, attachment, fetchForm]);
 
   // After form HTML is in the DOM, attach the SDK submit listener and wire
   // submitFnRef so the DialogActions Submit button can trigger it.
@@ -156,7 +139,6 @@ export function FormFillerDialog({
     sdk.attachSubmitListener(form as never, signer, {
       onSuccess: ({ event }) => {
         setSubmitting(false);
-        markSubmitted(event);
         onSubmitted(event);
       },
       onError: (err) => {
@@ -185,10 +167,9 @@ export function FormFillerDialog({
     return () => {
       formEl.removeEventListener("submit", onSubmitDom);
     };
-  }, [form, intl, onSubmitted, markSubmitted]);
+  }, [form, intl, onSubmitted]);
 
-  const showForm =
-    !loading && !fetchError && form && !(alreadySubmitted && !resubmitting);
+  const showForm = !loading && !fetchError && form;
 
   return (
     <Dialog
@@ -220,35 +201,10 @@ export function FormFillerDialog({
       </DialogTitle>
 
       <DialogContent dividers sx={{ px: { xs: 2, sm: 3 }, py: 3 }}>
-        {(status.state === "loading" || loading) && (
+        {loading && (
           <Box display="flex" justifyContent="center" py={6}>
             <CircularProgress />
           </Box>
-        )}
-
-        {alreadySubmitted && !resubmitting && !loading && (
-          <Stack spacing={2}>
-            <Alert icon={<CheckCircleIcon fontSize="inherit" />} severity="success">
-              {intl.formatMessage({ id: "form.alreadySubmitted" })}
-            </Alert>
-            <Stack direction="row" spacing={1}>
-              <Button
-                variant="contained"
-                onClick={() => {
-                  if (status.state === "submitted" && status.event) {
-                    onSubmitted(status.event);
-                  } else {
-                    onClose();
-                  }
-                }}
-              >
-                {intl.formatMessage({ id: "form.continue" })}
-              </Button>
-              <Button variant="outlined" onClick={() => setResubmitting(true)}>
-                {intl.formatMessage({ id: "form.submitAgain" })}
-              </Button>
-            </Stack>
-          </Stack>
         )}
 
         {fetchError && !loading && (
