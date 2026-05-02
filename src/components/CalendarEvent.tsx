@@ -483,7 +483,7 @@ export function CalendarEvent({ event }: CalendarEventViewProps) {
           {event.forms && event.forms.length > 0 && (
             <>
               <Typography variant="subtitle1">
-                {intl.formatMessage({ id: "event.forms" })}
+                {intl.formatMessage({ id: "form.attachments" })}
               </Typography>
               <Stack spacing={1}>
                 {event.forms.map((f, i) => (
