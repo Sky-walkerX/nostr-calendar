@@ -139,14 +139,7 @@ const dictionary: NestedObject = {
       continue: "Continue",
     },
     formResponses: {
-      viewButton: "View responses",
-      title: "Form responses",
-      empty: "No one has submitted this form yet.",
-      respondent: "Respondent",
-      submittedAt: "Submitted",
-      loadError: "Could not load form responses.",
-      encryptedNotice:
-        "This form is encrypted. Open it in Formstr to view responses.",
+      viewButton: "View responses in Formstr",
     },
     deleteEvent: {
       title: "Delete Event",
@@ -384,18 +377,16 @@ const dictionary: NestedObject = {
       submitError:
         "Ihre Antwort konnte nicht gesendet werden. Bitte versuchen Sie es erneut.",
       alreadySubmitted: "Sie haben dieses Formular bereits beantwortet.",
+      yourResponse: "Ihre Antwort",
+      responseUnavailable:
+        "Wir haben Ihre Einreichung gefunden, aber die Antwortdetails werden noch von den Relays synchronisiert.",
+      noAnswer: "Keine Antwort",
+      unknownQuestion: "Frage",
       submitAgain: "Erneut absenden",
       continue: "Weiter",
     },
     formResponses: {
-      viewButton: "Antworten ansehen",
-      title: "Formularantworten",
-      empty: "Noch hat niemand auf dieses Formular geantwortet.",
-      respondent: "Antwortende(r)",
-      submittedAt: "Gesendet",
-      loadError: "Antworten konnten nicht geladen werden.",
-      encryptedNotice:
-        "Dieses Formular ist verschlüsselt. Öffnen Sie es in Formstr, um die Antworten zu sehen.",
+      viewButton: "Antworten in Formstr ansehen",
     },
     deleteEvent: {
       title: "Termin löschen",
