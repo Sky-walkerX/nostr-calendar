@@ -527,7 +527,6 @@ export function CalendarEvent({ event }: CalendarEventViewProps) {
                 isRsvpSubmitting={isRsvpSubmitting}
                 onSubmitRsvp={submitRsvp}
                 onOpenForm={setActiveForm}
-                onViewResponses={setResponsesForm}
               />
               <Divider />
             </>
@@ -786,14 +785,12 @@ function RespondPanel({
   isRsvpSubmitting,
   onSubmitRsvp,
   onOpenForm,
-  onViewResponses,
 }: {
   event: ICalendarEvent;
   myRsvp?: RSVPRecord;
   isRsvpSubmitting: boolean;
   onSubmitRsvp: (payload: RSVPPayload) => Promise<void>;
   onOpenForm: (form: IFormAttachment) => void;
-  onViewResponses: (form: IFormAttachment) => void;
 }) {
   const intl = useIntl();
   const { user, updateLoginModal } = useUser();
@@ -1052,7 +1049,6 @@ function RespondPanel({
                   form={form}
                   eventAuthor={event.user}
                   onFill={() => onOpenForm(form)}
-                  onViewResponses={() => onViewResponses(form)}
                 />
               ))}
             </Stack>
