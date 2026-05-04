@@ -74,6 +74,16 @@ export const nostrEventToCalendar = (
           parsedEvent.notificationPreference = value;
         }
         break;
+      case "form":
+        if (value) {
+          const viewKey = event.tags[index]?.[2];
+          if (!parsedEvent.forms) parsedEvent.forms = [];
+          parsedEvent.forms.push({
+            naddr: value,
+            ...(viewKey ? { viewKey } : {}),
+          });
+        }
+        break;
       case "L":
         switch (value) {
           case "rrule":

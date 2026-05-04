@@ -35,6 +35,25 @@ export interface IScheduledNotification {
 
 export type NotificationPreference = "enabled" | "disabled";
 
+/**
+ * Reference to a Formstr form attached to a calendar event.
+ *
+ * Stored on a private calendar event as a `form` tag:
+ *   ["form", naddr, viewKey?]
+ *
+ * The naddr is the Nostr address (NIP-19) of the form.
+ *
+ * The optional viewKey is the form's read-only NIP-44 decryption key —
+ * the same value Formstr surfaces in shareable links as `?viewKey=<hex>`.
+ * It must NEVER be confused with the form's `responseKey` (a.k.a. admin /
+ * edit key), which grants write access to the form definition itself and
+ * must never be embedded in shared calendar events.
+ */
+export interface IFormAttachment {
+  naddr: string;
+  viewKey?: string;
+}
+
 export interface ICalendarEvent {
   begin: number;
   description: string;
@@ -66,4 +85,11 @@ export interface ICalendarEvent {
   calendarId?: string;
   isInvitation?: boolean;
   relayHint?: string;
+  /**
+   * Forms attached to this event (Formstr).
+   * Authors may attach one or more forms; participants are expected to
+   * fill them when adding the event to their calendar.
+   * Currently only persisted for private events.
+   */
+  forms?: IFormAttachment[];
 }
