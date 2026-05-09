@@ -110,18 +110,16 @@ export interface RSVPPayload {
 }
 
 /**
- * Builds the rumor (kind RSVPRumor) for an RSVP. The rumor pubkey is
- * the responder's pubkey and the tags carry the questionnaire data:
+ * Builds NIP-52-style RSVP tags carrying the questionnaire data:
  *
  *   ["a", "<kind>:<authorPubkey>:<dTag>", relayHint?]
  *   ["status", "accepted"|"declined"|"tentative"]
  *   ["start", "<unix>"]?
  *   ["end",   "<unix>"]?
  *
- * The free-text comment is placed in `content`. For private RSVPs the
- * whole rumor is gift-wrapped so `content` is encrypted in transit.
+ * The free-text comment is placed in `content` by the public RSVP publisher.
  */
-function buildRSVPRumorTags(opts: {
+function buildRSVPTags(opts: {
   referenceKind: number;
   authorPubKey: string;
   eventDTag: string;
@@ -221,9 +219,7 @@ function parsePrivateRSVPEvent(
  * The RSVP is published as a private RSVP event (kind 32069) whose
  * payload is encrypted with the event's shared viewKey. Readers discover
  * it by the calendar-event "a" tag and can decrypt it only if they know
- * that viewKey. Legacy gift-wrapped RSVP rumors are still read elsewhere
- * for backwards compatibility, but this publish path writes the current
- * kind-32069 format directly.
+ * that viewKey.
  */
 export async function publishPrivateRSVPEvent(params: {
   authorPubKey: string;
@@ -282,7 +278,7 @@ export async function publishPublicRSVPEvent(params: {
   payload: RSVPPayload;
 }) {
   const responderPubkey = await getUserPublicKey();
-  const tags = buildRSVPRumorTags({
+  const tags = buildRSVPTags({
     referenceKind: EventKinds.PublicCalendarEvent,
     authorPubKey: params.authorPubKey,
     eventDTag: params.eventId,
@@ -616,17 +612,16 @@ const parseRSVPTags = (
 };
 
 /**
- * Subscribes to RSVP gift wraps addressed to the current user and emits
- * a parsed RSVP record for each rumor that matches the supplied event
- * coordinate. Use this on the event detail page to aggregate participant
- * statuses for a private calendar event.
+ * Subscribes to current private RSVP events (kind 32069) and emits parsed
+ * RSVP records that match the supplied event coordinate. Use this on the
+ * event detail page to aggregate participant statuses for a private calendar
+ * event.
  */
 export const fetchPrivateEventRSVPs = (
   params: {
     eventCoord: string;
     viewKey: string;
     relayHint?: string;
-    recipientPubkey?: string;
   },
   onRSVP: (record: RSVPRecord) => void,
   onEose?: () => void,
@@ -634,17 +629,6 @@ export const fetchPrivateEventRSVPs = (
   const privateRelayList = getDiscoveryRelays(
     params.relayHint ? [params.relayHint] : [],
   );
-  // We always query the current kind-32069 stream. When recipientPubkey is
-  // available, we also query the legacy gift-wrapped RSVP stream addressed to
-  // that recipient, so onEose must wait for both subscriptions to complete.
-  let pendingEoseCount = params.recipientPubkey ? 2 : 1;
-  const handleEose = () => {
-    pendingEoseCount -= 1;
-    if (pendingEoseCount === 0) {
-      onEose?.();
-    }
-  };
-
   const handles: Array<{ close?: () => void; unsubscribe?: () => void }> = [];
   handles.push(
     nostrRuntime.subscribe(
@@ -666,48 +650,10 @@ export const fetchPrivateEventRSVPs = (
             console.error("Failed to process private RSVP:", error);
           }
         },
-        onEose: handleEose,
+        onEose,
       },
     ),
   );
-
-  if (params.recipientPubkey) {
-    // Legacy fallback: older private RSVPs were wrapped to the invitee and
-    // discovered via a #p filter, so this branch only exists to preserve reads
-    // for those already-published RSVP gift wraps.
-    const legacyRelayList = getRelays();
-    const legacyFilter: Filter = {
-      kinds: [EventKinds.RSVPGiftWrap],
-      "#p": [params.recipientPubkey],
-    };
-    handles.push(
-      nostrRuntime.subscribe(legacyRelayList, [legacyFilter], {
-        onEvent: async (giftWrap: Event) => {
-          try {
-            const rumor = await nip59.unwrapEvent(giftWrap);
-            if (rumor.kind !== EventKinds.RSVPRumor) return;
-            const record = parseRSVPTags(
-              rumor.pubkey,
-              rumor.tags,
-              rumor.content,
-              rumor.created_at,
-            );
-            if (!record) return;
-            if (
-              record.eventCoord.split(":").slice(0, 3).join(":") !==
-              params.eventCoord
-            ) {
-              return;
-            }
-            onRSVP(record);
-          } catch (error) {
-            console.error("Failed to process RSVP gift wrap:", error);
-          }
-        },
-        onEose: handleEose,
-      }),
-    );
-  }
 
   return {
     close: () => {

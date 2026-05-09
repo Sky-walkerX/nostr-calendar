@@ -4,8 +4,7 @@
  * Subscribes to RSVP responses for a calendar event and exposes a
  * deduplicated, pubkey-keyed map of the latest RSVP per responder.
  *
- * Private events: kind 32069 encrypted with the event viewKey, with
- * legacy gift-wrap reads kept for backwards compatibility.
+ * Private events: kind 32069 encrypted with the event viewKey.
  * Public events:  NIP-52 kind 31925, read directly off the event tags.
  *
  * Per the issue, all responders are treated as participants — even when
@@ -86,7 +85,6 @@ export function useEventRsvps(
           eventCoord,
           viewKey: event.viewKey,
           relayHint: event.relayHint,
-          recipientPubkey: myPubkey,
         },
         handleRecord,
         () => setIsLoading(false),

@@ -51,7 +51,6 @@ import { EventKinds } from "./EventConfigs";
 
 const AUTHOR = "b".repeat(64);
 const RESPONDER = "c".repeat(64);
-const RECIPIENT = "a".repeat(64);
 const D_TAG = "evt-d-tag";
 const COORD = `${EventKinds.PrivateCalendarEvent}:${AUTHOR}:${D_TAG}`;
 const PUBLIC_COORD = `${EventKinds.PublicCalendarEvent}:${AUTHOR}:${D_TAG}`;
@@ -176,40 +175,21 @@ describe("RSVP fetch helpers", () => {
     expect(collected).toHaveLength(0);
   });
 
-  it("still parses legacy gift-wrapped private RSVPs when a recipient pubkey is provided", async () => {
-    const collected: RSVPRecord[] = [];
-    mockSubscribe
-      .mockImplementationOnce(() => ({ close: vi.fn() }))
-      .mockImplementationOnce((_relays, _filters, { onEvent }) => {
-        void onEvent({ id: "gw" });
-        return { close: vi.fn() };
-      });
-    mockUnwrap.mockResolvedValueOnce({
-      pubkey: RESPONDER,
-      kind: EventKinds.RSVPRumor,
-      created_at: 1700000000,
-      content: "legacy comment",
-      tags: [
-        ["a", COORD],
-        ["status", "accepted"],
-      ],
-    });
+  it("subscribes only to current kind-32069 private RSVPs", () => {
+    mockSubscribe.mockReturnValue({ close: vi.fn() });
 
     fetchPrivateEventRSVPs(
-      {
-        eventCoord: COORD,
-        viewKey: PRIVATE_VIEW_KEY,
-        recipientPubkey: RECIPIENT,
-      },
-      (r) => collected.push(r),
+      { eventCoord: COORD, viewKey: PRIVATE_VIEW_KEY },
+      vi.fn(),
     );
-    await new Promise((r) => setTimeout(r, 0));
 
-    expect(collected[0]).toMatchObject({
-      pubkey: RESPONDER,
-      status: RSVPStatus.accepted,
-      comment: "legacy comment",
-    });
+    expect(mockSubscribe).toHaveBeenCalledTimes(1);
+    expect(mockSubscribe.mock.calls[0][1]).toEqual([
+      {
+        kinds: [EventKinds.PrivateRSVPEvent],
+        "#a": [COORD],
+      },
+    ]);
   });
 });
 
