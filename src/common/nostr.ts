@@ -218,10 +218,12 @@ function parsePrivateRSVPEvent(
 /**
  * Publishes an RSVP for a private calendar event.
  *
- * The RSVP is constructed as a kind 55 rumor signed by the responder's
- * pubkey, then gift-wrapped (NIP-59) to every participant of the event.
- * This keeps the responder's reply private to the invited group while
- * still letting other participants discover and aggregate statuses.
+ * The RSVP is published as a private RSVP event (kind 32069) whose
+ * payload is encrypted with the event's shared viewKey. Readers discover
+ * it by the calendar-event "a" tag and can decrypt it only if they know
+ * that viewKey. Legacy gift-wrapped RSVP rumors are still read elsewhere
+ * for backwards compatibility, but this publish path writes the current
+ * kind-32069 format directly.
  */
 export async function publishPrivateRSVPEvent(params: {
   authorPubKey: string;
@@ -634,6 +636,9 @@ export const fetchPrivateEventRSVPs = (
   const privateRelayList = getDiscoveryRelays(
     params.relayHint ? [params.relayHint] : [],
   );
+  // We always query the current kind-32069 stream. When recipientPubkey is
+  // available, we also query the legacy gift-wrapped RSVP stream addressed to
+  // that recipient, so onEose must wait for both subscriptions to complete.
   let pendingEoseCount = params.recipientPubkey ? 2 : 1;
   const handleEose = () => {
     pendingEoseCount -= 1;
@@ -669,6 +674,9 @@ export const fetchPrivateEventRSVPs = (
   );
 
   if (params.recipientPubkey) {
+    // Legacy fallback: older private RSVPs were wrapped to the invitee and
+    // discovered via a #p filter, so this branch only exists to preserve reads
+    // for those already-published RSVP gift wraps.
     const legacyRelayList = getRelays();
     const legacyFilter: Filter = {
       kinds: [EventKinds.RSVPGiftWrap],

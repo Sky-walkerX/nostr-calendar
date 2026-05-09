@@ -12,7 +12,16 @@
  */
 
 import { useMemo, useState } from "react";
-import { Box, Button, Divider, Stack, Typography } from "@mui/material";
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Box,
+  Button,
+  Stack,
+  Typography,
+} from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import dayjs from "dayjs";
 import { useIntl } from "react-intl";
 import { ICalendarEvent } from "../utils/types";
@@ -102,56 +111,59 @@ export function RSVPSuggestionsPanel({
   };
 
   return (
-    <Box>
-      <Divider sx={{ mb: 1 }} />
-      <Typography variant="subtitle2" gutterBottom>
-        {intl.formatMessage({ id: "rsvp.suggestionsHeading" })}
-      </Typography>
-      <Stack spacing={1}>
-        {suggestions.map((s) => {
-          const key = `${s.start}-${s.end ?? ""}`;
-          return (
-            <Box
-              key={key}
-              display="flex"
-              alignItems="center"
-              gap={1}
-              flexWrap="wrap"
-              sx={{
-                p: 1,
-                borderRadius: 1,
-                border: (t) => `1px solid ${t.palette.divider}`,
-              }}
-            >
-              <Box flex={1} minWidth={220}>
-                <Typography variant="body2">
-                  {dayjs(s.start * 1000).format("ddd, DD MMM YYYY ⋅ HH:mm")}
-                  {s.end ? ` → ${dayjs(s.end * 1000).format("HH:mm")}` : ""}
-                </Typography>
-                <Stack direction="row" spacing={0.5} flexWrap="wrap" mt={0.5}>
-                  {s.responders.map((r) => (
-                    <Participant
-                      key={r.pubkey}
-                      pubKey={r.pubkey}
-                      isAuthor={false}
-                    />
-                  ))}
-                </Stack>
+    <Accordion disableGutters variant="outlined" sx={{ boxShadow: "none" }}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+        <Typography variant="subtitle2">
+          {intl.formatMessage({ id: "rsvp.suggestionsHeading" })}
+        </Typography>
+      </AccordionSummary>
+      <AccordionDetails>
+        <Stack spacing={1}>
+          {suggestions.map((s) => {
+            const key = `${s.start}-${s.end ?? ""}`;
+            return (
+              <Box
+                key={key}
+                display="flex"
+                alignItems="center"
+                gap={1}
+                flexWrap="wrap"
+                sx={{
+                  p: 1,
+                  borderRadius: 1,
+                  border: (t) => `1px solid ${t.palette.divider}`,
+                }}
+              >
+                <Box flex={1} minWidth={220}>
+                  <Typography variant="body2">
+                    {dayjs(s.start * 1000).format("ddd, DD MMM YYYY ⋅ HH:mm")}
+                    {s.end ? ` → ${dayjs(s.end * 1000).format("HH:mm")}` : ""}
+                  </Typography>
+                  <Stack direction="row" spacing={0.5} flexWrap="wrap" mt={0.5}>
+                    {s.responders.map((r) => (
+                      <Participant
+                        key={r.pubkey}
+                        pubKey={r.pubkey}
+                        isAuthor={false}
+                      />
+                    ))}
+                  </Stack>
+                </Box>
+                {canApplySuggestions ? (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => handleApply(s)}
+                    disabled={applyingKey === key}
+                  >
+                    {intl.formatMessage({ id: "rsvp.applySuggestion" })}
+                  </Button>
+                ) : null}
               </Box>
-              {canApplySuggestions ? (
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() => handleApply(s)}
-                  disabled={applyingKey === key}
-                >
-                  {intl.formatMessage({ id: "rsvp.applySuggestion" })}
-                </Button>
-              ) : null}
-            </Box>
-          );
-        })}
-      </Stack>
-    </Box>
+            );
+          })}
+        </Stack>
+      </AccordionDetails>
+    </Accordion>
   );
 }

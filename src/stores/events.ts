@@ -29,7 +29,6 @@ import {
   removeOne,
 } from "@voiceflow/normal-store";
 import { nostrEventToCalendar } from "../utils/parser";
-import { RSVPResponse } from "../utils/types";
 import type { ICalendarEvent } from "../utils/types";
 import {
   scheduleEventNotifications,
@@ -95,9 +94,8 @@ const syncEventNotifications = async (
 };
 
 let publicSubscription: SubscriptionHandle | undefined;
-let privateSubscription: SubscriptionHandle | undefined;
 
-export { ICalendarEvent, RSVPResponse };
+export { ICalendarEvent };
 
 interface TimeRangeConfig {
   daysBefore: number;
@@ -374,7 +372,7 @@ export const useTimeBasedEvents = create<{
 
     // Fetch all matching events in a single subscription, using stored relay
     // hints first so events are retrieved from where they were published.
-    privateSubscription = fetchPrivateCalendarEvents(
+    fetchPrivateCalendarEvents(
       {
         eventIds: eventIdsToFetch,
         authors: Array.from(authorPubkeys),
