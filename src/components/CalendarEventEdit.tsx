@@ -52,7 +52,10 @@ import { getRelays } from "../common/nostr";
 import { useRelayStore } from "../stores/relays";
 import { useCalendarLists } from "../stores/calendarLists";
 import { useTimeBasedEvents } from "../stores/events";
-import { parseEventRef } from "../utils/calendarListTypes";
+import {
+  findCalendarForEvent,
+  parseEventRef,
+} from "../utils/calendarListTypes";
 import { CalendarListSelect } from "./CalendarListSelect";
 import { parseFormInput } from "../utils/formLink";
 import type { IFormAttachment } from "../utils/types";
@@ -285,7 +288,9 @@ export function CalendarEventEdit({
   );
   const { calendars, addEventToCalendar } = useCalendarLists();
   const [selectedCalendarId, setSelectedCalendarId] = useState<string>(
-    initialEvent?.calendarId || calendars[0]?.id || "",
+    (initialEvent && findCalendarForEvent(calendars, initialEvent)?.id) ||
+      calendars[0]?.id ||
+      "",
   );
 
   const [eventDetails, setEventDetails] = useState<ICalendarEvent>(() => {
@@ -437,9 +442,7 @@ export function CalendarEventEdit({
             selectedCalendarId,
           );
 
-          useTimeBasedEvents
-            .getState()
-            .updateEvent({ ...updates.event, calendarId: updates.calendarId });
+          useTimeBasedEvents.getState().updateEvent(updates.event);
         } else {
           const { eventRef, authorPubkey } =
             await publishPrivateCalendarEvent(eventToSave);
@@ -451,7 +454,6 @@ export function CalendarEventEdit({
             viewKey,
             relayHint: relayUrl,
             user: authorPubkey,
-            calendarId: selectedCalendarId,
           });
         }
       } else {

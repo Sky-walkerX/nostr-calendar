@@ -41,7 +41,11 @@ import {
   removeSecureItem,
 } from "../common/localStorage";
 import { useCalendarLists } from "./calendarLists";
-import { parseEventRef } from "../utils/calendarListTypes";
+import {
+  findCalendarForEvent,
+  getCalendarEventCoordinate,
+  parseEventRef,
+} from "../utils/calendarListTypes";
 import type { SubscriptionHandle } from "../common/nostrRuntime";
 import { getDTag } from "../common/nostrRuntime/utils/helpers";
 import { shouldScheduleNotifications } from "../utils/notificationPreferences";
@@ -53,12 +57,12 @@ const saveEventsToStorage = (events: ICalendarEvent[]) => {
 };
 
 const getCalendarNotificationPreference = (
-  calendarId?: string,
+  event: ICalendarEvent,
 ): "enabled" | "disabled" | undefined => {
-  if (!calendarId) return undefined;
-  const calendar = useCalendarLists
-    .getState()
-    .calendars.find((c) => c.id === calendarId);
+  const calendar = findCalendarForEvent(
+    useCalendarLists.getState().calendars,
+    event,
+  );
   return calendar?.notificationPreference;
 };
 
@@ -66,9 +70,7 @@ const syncEventNotifications = async (
   event: ICalendarEvent,
   { cancelExisting = false }: { cancelExisting?: boolean } = {},
 ): Promise<void> => {
-  const calendarPreference = getCalendarNotificationPreference(
-    event.calendarId,
-  );
+  const calendarPreference = getCalendarNotificationPreference(event);
   const shouldSchedule = shouldScheduleNotifications(
     event.notificationPreference,
     calendarPreference,
@@ -138,7 +140,6 @@ const processPrivateEvent = (
   event: Event,
   _timeRange: ReturnType<typeof getTimeRange>,
   viewKey?: string,
-  calendarId?: string,
   relayHint?: string,
 ) => {
   const { events } = useTimeBasedEvents.getState();
@@ -148,11 +149,6 @@ const processPrivateEvent = (
     isPrivateEvent: true,
     relayHint,
   });
-
-  // Attach the calendar ID so events can be themed by calendar color
-  if (calendarId) {
-    parsedEvent.calendarId = calendarId;
-  }
 
   // Check if we have valid begin/end times after processing all tags
   if (parsedEvent.begin === 0 || parsedEvent.end === 0) {
@@ -295,8 +291,16 @@ export const useTimeBasedEvents = create<{
   },
   refreshNotificationPreferencesForCalendar: (calendarId) => {
     const { events } = useTimeBasedEvents.getState();
-    const relevantEvents = events.filter(
-      (event) => event.calendarId === calendarId,
+    const calendar = useCalendarLists
+      .getState()
+      .calendars.find((cal) => cal.id === calendarId);
+    if (!calendar) return;
+
+    const calendarCoordinates = new Set(
+      calendar.eventRefs.map((ref) => ref[0]),
+    );
+    const relevantEvents = events.filter((event) =>
+      calendarCoordinates.has(getCalendarEventCoordinate(event)),
     );
 
     void (async () => {
@@ -329,27 +333,12 @@ export const useTimeBasedEvents = create<{
 
     if (visibleRefs.length === 0) return;
 
-    // Get calendar ID for each ref so events can be colored by their calendar
-    // Key by coordinate (first element of ref array) since it uniquely identifies the event
-    const calendars = useCalendarLists
-      .getState()
-      .calendars.filter((c) => c.isVisible);
-    const refToCalendarId = new Map<string, string>();
-    for (const cal of calendars) {
-      for (const ref of cal.eventRefs) {
-        refToCalendarId.set(ref[0], cal.id);
-      }
-    }
-
     // Parse refs and split into recurring vs non-recurring
     const eventIdsToFetch: string[] = [];
     const kinds = new Set<number>();
     const authorPubkeys = new Set<string>();
     const hintRelays = new Set<string>();
-    const viewKeyMap = new Map<
-      string,
-      { viewKey: string; calendarId: string; relayUrl: string }
-    >();
+    const viewKeyMap = new Map<string, { viewKey: string; relayUrl: string }>();
 
     for (const ref of visibleRefs) {
       const parsed = parseEventRef(ref);
@@ -363,7 +352,6 @@ export const useTimeBasedEvents = create<{
       if (parsed.relayUrl) hintRelays.add(parsed.relayUrl);
       viewKeyMap.set(parsed.eventDTag, {
         viewKey: parsed.viewKey,
-        calendarId: refToCalendarId.get(ref[0]) || "",
         relayUrl: parsed.relayUrl,
       });
     }
@@ -392,7 +380,6 @@ export const useTimeBasedEvents = create<{
               decrypted,
               timeRange,
               meta.viewKey,
-              meta.calendarId,
               meta.relayUrl,
             );
           }

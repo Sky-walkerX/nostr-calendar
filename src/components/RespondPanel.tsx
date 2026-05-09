@@ -91,7 +91,6 @@ export function RespondPanel({
         await addEventToCalendar(calendarId, eventRef);
         updateEvent({
           ...event,
-          calendarId,
           isInvitation: false,
         });
       }

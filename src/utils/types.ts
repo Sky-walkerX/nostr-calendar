@@ -76,7 +76,6 @@ export interface ICalendarEvent {
    * If undefined, calendar-list preference should be used as fallback.
    */
   notificationPreference?: NotificationPreference;
-  calendarId?: string;
   isInvitation?: boolean;
   relayHint?: string;
   /**

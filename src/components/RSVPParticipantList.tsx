@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   Box,
+  Button,
   Collapse,
   IconButton,
   Stack,
@@ -45,13 +46,28 @@ export function RSVPParticipantList({
   event,
   participants,
   recordsByPubkey,
+  canApplySuggestions = false,
+  onApplySuggestion,
 }: {
   event: ICalendarEvent;
   participants: string[];
   recordsByPubkey: Record<string, RSVPRecord>;
+  canApplySuggestions?: boolean;
+  onApplySuggestion?: (record: RSVPRecord) => Promise<void>;
 }) {
   const intl = useIntl();
   const [expandedPubkey, setExpandedPubkey] = useState<string | null>(null);
+  const [applyingPubkey, setApplyingPubkey] = useState<string | null>(null);
+
+  const handleApplySuggestion = async (record: RSVPRecord) => {
+    if (!onApplySuggestion) return;
+    setApplyingPubkey(record.pubkey);
+    try {
+      await onApplySuggestion(record);
+    } finally {
+      setApplyingPubkey(null);
+    }
+  };
 
   return (
     <Stack direction="column" gap={0.75} width="100%">
@@ -107,22 +123,37 @@ export function RSVPParticipantList({
             <Collapse in={expanded && !!record} timeout="auto" unmountOnExit>
               <Stack spacing={0.5} mt={0.5} ml={4.5}>
                 {details.hasSuggestedTime ? (
-                  <Typography variant="caption" color="text.secondary">
-                    {details.hasSuggestedStart
-                      ? `${intl.formatMessage({ id: "rsvp.suggestedStart" })}: ${dayjs(
-                          (record?.suggestedStart ?? details.eventStartSec) *
-                            1000,
-                        ).format("ddd, DD MMM YYYY ⋅ HH:mm")}`
-                      : null}
-                    {details.hasSuggestedStart && details.hasSuggestedEnd
-                      ? " · "
-                      : ""}
-                    {details.hasSuggestedEnd
-                      ? `${intl.formatMessage({ id: "rsvp.suggestedEnd" })}: ${dayjs(
-                          (record?.suggestedEnd ?? details.eventEndSec) * 1000,
-                        ).format("ddd, DD MMM YYYY ⋅ HH:mm")}`
-                      : null}
-                  </Typography>
+                  <Stack spacing={0.5} alignItems="flex-start">
+                    <Typography variant="caption" color="text.secondary">
+                      {details.hasSuggestedStart
+                        ? `${intl.formatMessage({ id: "rsvp.suggestedStart" })}: ${dayjs(
+                            (record?.suggestedStart ?? details.eventStartSec) *
+                              1000,
+                          ).format("ddd, DD MMM YYYY ⋅ HH:mm")}`
+                        : null}
+                      {details.hasSuggestedStart && details.hasSuggestedEnd
+                        ? " · "
+                        : ""}
+                      {details.hasSuggestedEnd
+                        ? `${intl.formatMessage({ id: "rsvp.suggestedEnd" })}: ${dayjs(
+                            (record?.suggestedEnd ?? details.eventEndSec) *
+                              1000,
+                          ).format("ddd, DD MMM YYYY ⋅ HH:mm")}`
+                        : null}
+                    </Typography>
+                    {canApplySuggestions && record ? (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={applyingPubkey === record.pubkey}
+                        onClick={() => {
+                          void handleApplySuggestion(record);
+                        }}
+                      >
+                        {intl.formatMessage({ id: "rsvp.applySuggestion" })}
+                      </Button>
+                    ) : null}
+                  </Stack>
                 ) : null}
                 {details.hasComment && record ? (
                   <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>

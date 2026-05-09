@@ -13,20 +13,7 @@ const makeCalendar = (id: string, eventRefs: string[][] = []) => ({
 });
 
 describe("findCalendarForEvent", () => {
-  it("prefers the explicit calendarId when it exists", () => {
-    const calendars = [makeCalendar("work"), makeCalendar("personal")];
-
-    const result = findCalendarForEvent(calendars, {
-      calendarId: "personal",
-      kind: 32678,
-      user: "author-pubkey",
-      id: "event-d-tag",
-    });
-
-    expect(result?.id).toBe("personal");
-  });
-
-  it("falls back to calendar refs when the event prop is stale", () => {
+  it("resolves membership from calendar refs", () => {
     const coordinate = "32678:author-pubkey:event-d-tag";
     const calendars = [
       makeCalendar("work"),
@@ -36,7 +23,6 @@ describe("findCalendarForEvent", () => {
     ];
 
     const result = findCalendarForEvent(calendars, {
-      calendarId: undefined,
       kind: 32678,
       user: "author-pubkey",
       id: "event-d-tag",
@@ -49,7 +35,6 @@ describe("findCalendarForEvent", () => {
     const calendars = [makeCalendar("work")];
 
     const result = findCalendarForEvent(calendars, {
-      calendarId: undefined,
       kind: 31923,
       user: "author-pubkey",
       id: "missing-event",

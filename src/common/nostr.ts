@@ -321,7 +321,6 @@ export async function publishPublicRSVPEvent(params: {
  * 4. Create gift-wrap invitations (NIP-59) for each participant
  * 5. Add the event reference to the user's selected calendar list
  *
- * The calendarId parameter specifies which calendar to add the event to.
  * The event reference includes the viewKey so it can be decrypted later
  * when loading events from the calendar list.
  */
@@ -495,7 +494,6 @@ export async function editPrivateCalendarEvent(
 
   return {
     event,
-    calendarId,
   };
 }
 

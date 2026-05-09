@@ -31,7 +31,8 @@ import Delete from "@mui/icons-material/Delete";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import dayjs from "dayjs";
 import { exportICS, isMobile } from "../common/utils";
-import { encodeNAddr } from "../common/nostr";
+import { editPrivateCalendarEvent, encodeNAddr } from "../common/nostr";
+import type { RSVPRecord } from "../common/nostr";
 import { getEditEventPage, getEventPage } from "../utils/routingHelper";
 import { useNavigate } from "react-router";
 import { getAppBaseUrl, isNative } from "../utils/platform";
@@ -52,7 +53,6 @@ import { FormAttachmentRow } from "./FormAttachmentRow";
 import type { IFormAttachment } from "../utils/types";
 import { useEventRsvps } from "../hooks/useEventRsvps";
 import { RSVPBar } from "./RSVPBar";
-import { RSVPSuggestionsPanel } from "./RSVPSuggestionsPanel";
 import { RespondPanel } from "./RespondPanel";
 import { RSVPParticipantList } from "./RSVPParticipantList";
 
@@ -421,8 +421,29 @@ export function CalendarEvent({ event }: CalendarEventViewProps) {
     await moveEventToCalendar(nextCalendarId, eventCoordinate, eventRef);
     updateEvent({
       ...event,
-      calendarId: nextCalendarId,
     });
+  };
+
+  const handleApplyRSVPSuggestion = async (record: RSVPRecord) => {
+    if (
+      !calendar ||
+      !event.isPrivateEvent ||
+      (record.suggestedStart === undefined && record.suggestedEnd === undefined)
+    ) {
+      return;
+    }
+
+    const eventStartSecs = Math.floor(event.begin / 1000);
+    const eventDurationSecs = Math.floor((event.end - event.begin) / 1000);
+    const nextStartSecs = record.suggestedStart ?? eventStartSecs;
+    const updated = {
+      ...event,
+      begin: nextStartSecs * 1000,
+      end: (record.suggestedEnd ?? nextStartSecs + eventDurationSecs) * 1000,
+    };
+
+    await editPrivateCalendarEvent(updated, calendar.id);
+    updateEvent(updated);
   };
 
   return (
@@ -526,6 +547,10 @@ export function CalendarEvent({ event }: CalendarEventViewProps) {
               event={event}
               participants={rsvpAllParticipants}
               recordsByPubkey={rsvpByPubkey}
+              canApplySuggestions={
+                isEditable && event.isPrivateEvent && !!calendar
+              }
+              onApplySuggestion={handleApplyRSVPSuggestion}
             />
           </Box>
 
@@ -539,14 +564,6 @@ export function CalendarEvent({ event }: CalendarEventViewProps) {
                 onSubmit={submitRsvp}
               />
             </>
-          )}
-
-          {isEditable && (
-            <RSVPSuggestionsPanel
-              event={event}
-              calendarId={calendar?.id}
-              records={Object.values(rsvpByPubkey)}
-            />
           )}
 
           {calendar ? (
